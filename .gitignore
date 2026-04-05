@@ -29,9 +29,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+.tmp-dev.log
 
 # env files (can opt-in for committing if needed)
 .env*
+
+# local archives
+qikink-plugin.zip
+qikink-plugin/
 
 # vercel
 .vercel
