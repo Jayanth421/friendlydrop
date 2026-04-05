@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ADMIN_2FA_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/lib/constants";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
-import { hasPermission, isAdminRole } from "@/lib/rbac";
+import { hasPermission, isAdminRole, isVendorRole } from "@/lib/rbac";
 import { AdminPermission, UserRole } from "@/types";
 
 export interface SessionUser {
@@ -66,6 +66,16 @@ export async function requireAdminPermission(permission: AdminPermission) {
 
   if (!hasPermission(user.role, permission)) {
     redirect("/admin/dashboard");
+  }
+
+  return user;
+}
+
+export async function requireVendorOrAdmin() {
+  const user = await requireUser();
+
+  if (!(isVendorRole(user.role) || isAdminRole(user.role))) {
+    redirect("/");
   }
 
   return user;

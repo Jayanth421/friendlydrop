@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const authRoutes = ["/cart", "/checkout", "/orders", "/wishlist", "/account", "/admin-2fa"];
+const authRoutes = ["/cart", "/checkout", "/orders", "/wishlist", "/account", "/vendor", "/admin-2fa"];
 const adminRoute = "/admin";
 
 export function middleware(request: NextRequest) {
@@ -26,6 +26,7 @@ export const config = {
     "/orders/:path*",
     "/wishlist/:path*",
     "/account/:path*",
+    "/vendor/:path*",
     "/admin/:path*",
     "/admin-2fa/:path*",
   ],

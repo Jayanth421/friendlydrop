@@ -25,6 +25,8 @@ import {
   Settings,
   Search,
   Network,
+  Layers,
+  Store,
 } from "lucide-react";
 import { hasPermission } from "@/lib/rbac";
 import { UserRole } from "@/types";
@@ -33,26 +35,30 @@ import { cn } from "@/lib/utils";
 const items = [
   { href: "/admin/control-tower", label: "Control Tower", icon: Network, permission: "dashboard:view" as const },
   { href: "/admin/dashboard", label: "Dashboard", icon: BarChart3, permission: "dashboard:view" as const },
-  { href: "/admin/products", label: "Products", icon: Package, permission: "products:manage" as const },
   { href: "/admin/orders", label: "Orders", icon: ShoppingCart, permission: "orders:manage" as const },
   { href: "/admin/customers", label: "Customers", icon: Users, permission: "users:manage" as const },
-  { href: "/admin/uploads", label: "Uploads", icon: Image, permission: "orders:manage" as const },
+  { href: "/admin/vendors", label: "Vendors", icon: Store, permission: "vendors:manage" as const },
+  { href: "/admin/products", label: "Products", icon: Package, permission: "products:manage" as const },
+  { href: "/admin/categories", label: "Categories", icon: Layers, permission: "catalog:manage" as const },
+  { href: "/admin/marketing", label: "Marketing", icon: Megaphone, permission: "marketing:manage" as const },
+  { href: "/admin/banners", label: "Banners", icon: Image, permission: "banners:manage" as const },
+  { href: "/admin/shipping", label: "Delivery", icon: Truck, permission: "orders:manage" as const },
   { href: "/admin/payments", label: "Payments", icon: CreditCard, permission: "payments:view" as const },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart3, permission: "analytics:view" as const },
+  { href: "/admin/settings", label: "Settings", icon: Settings, permission: "settings:manage" as const },
+  { href: "/admin/uploads", label: "Uploads", icon: Image, permission: "orders:manage" as const },
   { href: "/admin/coupons", label: "Coupons", icon: Ticket, permission: "coupons:manage" as const },
   { href: "/admin/reviews", label: "Reviews", icon: Star, permission: "reviews:manage" as const },
   { href: "/admin/inventory", label: "Inventory", icon: Boxes, permission: "inventory:manage" as const },
-  { href: "/admin/shipping", label: "Shipping", icon: Truck, permission: "orders:manage" as const },
   { href: "/admin/reports", label: "Reports", icon: FileSpreadsheet, permission: "reports:export" as const },
   { href: "/admin/team", label: "Team", icon: Shield, permission: "team:manage" as const },
   { href: "/admin/support", label: "Support", icon: Headphones, permission: "support:manage" as const },
-  { href: "/admin/marketing", label: "Marketing", icon: Megaphone, permission: "marketing:manage" as const },
   { href: "/admin/finance", label: "Finance", icon: Wallet, permission: "payments:view" as const },
   { href: "/admin/returns", label: "Returns", icon: RotateCcw, permission: "returns:manage" as const },
   { href: "/admin/media", label: "Media", icon: FolderKanban, permission: "products:manage" as const },
   { href: "/admin/monitoring", label: "Monitoring", icon: Activity, permission: "dashboard:view" as const },
   { href: "/admin/logs", label: "Logs", icon: ScrollText, permission: "logs:view" as const },
   { href: "/admin/search", label: "Search", icon: Search, permission: "dashboard:view" as const },
-  { href: "/admin/settings", label: "Settings", icon: Settings, permission: "settings:manage" as const },
 ];
 
 export function AdminSidebar({ role }: { role: UserRole }) {

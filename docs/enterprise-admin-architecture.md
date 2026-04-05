@@ -1,101 +1,93 @@
 # Enterprise Admin Dashboard Blueprint
 
 ## 1. Platform Model
-- **Frontend**: Next.js App Router admin UI with role-gated modules.
-- **Domain Services**: Orders, Payments, Delivery, Inventory, Customers, Analytics, Automation.
-- **Real-time Layer**: SSE stream (`/api/admin/control-tower/stream`) and live summary endpoint (`/api/admin/control-tower/summary`).
-- **Persistence**: Firestore collections for transactional modules + `systemEvents` as integration timeline.
+- **Frontend**: Next.js App Router with admin and vendor workspaces.
+- **Core Domains**: Orders, Payments, Delivery, Inventory, Customers, Vendors, Catalog, Marketing, Banners, Analytics, Automation.
+- **Real-time Layer**: SSE stream (`/api/admin/control-tower/stream`) + snapshot endpoint (`/api/admin/control-tower/summary`).
+- **Persistence**: Firestore domain collections + `systemEvents` event timeline.
 
-## 2. Deeply Connected Event Flow
-- `checkout_initiated` -> pricing snapshot created (tax + GST + delivery)
+## 2. Connected Event Graph
+- `checkout_initiated` -> pricing snapshot locked
 - `payment_succeeded` -> order confirmed
-- `order_confirmed` -> inventory reservation workflow
-- `inventory_reserved` -> low-stock detection and alerts
-- `delivery_assigned` -> tracking + ETA injected automatically
-- `automation_rule_executed` -> audit-ready orchestration trail
+- `order_confirmed` -> inventory reserved
+- `inventory_reserved` -> low stock event (if threshold hit)
+- `vendor_notified` -> seller visibility + downstream fulfillment
+- `delivery_assigned` -> tracking + ETA
+- `automation_rule_executed` -> audit trail
 
-This provides the canonical chain:
-**Orders ↔ Payments ↔ Delivery ↔ Inventory ↔ Customers**
+Canonical chain:
+**Orders <-> Payments <-> Delivery <-> Inventory <-> Customers <-> Vendors**
 
-## 3. Automation Engine
-- `payment-success-to-fulfillment`
-  - Confirm order
-  - Reserve inventory
-  - Assign delivery
-- `inventory-low-stock-alert`
-  - Raise warning event when stock <= threshold
-- `delivery-failed-reassignment` (framework ready)
-  - Reassign courier
-  - Notify support + customer
+## 3. Customer CRM Domain
+- Unified customer view:
+  - profile, spend, order/payment counts, loyalty points, wallet balance
+- Segmentation:
+  - new / repeat / VIP
+- Actions:
+  - block/unblock, role controls, notes, notifications (email/SMS/WhatsApp/push channels)
+- Support integration:
+  - open ticket load included in CRM snapshot
 
-## 4. Order Lifecycle (Automated)
-1. Frontend creates order draft with `paymentMethod` and `priority`.
-2. Payment provider confirms transaction.
-3. System creates order and runs post-payment orchestration.
-4. Inventory is reserved atomically.
-5. Delivery assignment is auto-generated with courier + ETA.
-6. Customer sees full financial breakdown and tracking-ready status.
+## 4. Vendor Domain
+- Vendor onboarding endpoint + approval workflow
+- KYC and status states:
+  - pending / approved / rejected / suspended
+- Commission-aware seller profile
+- Payout stream:
+  - pending/completed settlement records
+- Vendor dashboard:
+  - order volume, revenue, payouts, recent orders
 
-## 5. Delivery System Design
-- Auto-assignment strategy:
-  - Uses order priority (`express` / `normal`) and region heuristic.
-  - Generates courier + tracking + ETA.
-- SLA tracking:
-  - Computes on-time vs delayed shipment rate in Control Tower snapshot.
-- Reverse logistics:
-  - Refund workflows emit payment events for return/reconciliation.
+## 5. Catalog + Banner + Marketing Domain
+- Nested category model with parent/level hierarchy
+- Catalog SEO fields + tags
+- Banner scheduler model:
+  - hero/offer/category banners
+  - desktop/mobile assets
+  - campaign linking
+- Campaign linkage:
+  - marketing status and banner activation are structurally connected
 
-## 6. Payment System Design
-- Multi-gateway support: Razorpay + Stripe in production flow, PayPal-ready extension point.
-- Unified pricing core:
-  - Subtotal
-  - Discount
-  - GST
-  - Delivery fee
-  - Final payable total
-- Reconciliation-ready:
-  - Gateway metrics and success rates included in Control Tower.
+## 6. Automation Engine
+- Active workflow rules:
+  - payment success -> confirm -> reserve -> assign delivery
+  - low stock alert generation
+  - delivery failed reassignment hook
+- Additional automation-ready endpoints:
+  - customer notify
+  - vendor approval updates
+  - catalog/banner upserts publishing system events
 
-## 7. Analytics Engine
-- Control Tower computes:
-  - Revenue (24h), orders (24h)
-  - Payment success rate
-  - On-time delivery rate
-  - Delayed shipments
-  - Low stock products
-  - Open support tickets
-  - Automation executions
+## 7. API-Ready Surface
+- Control Tower:
+  - `GET /api/admin/control-tower/summary`
+  - `GET /api/admin/control-tower/stream`
+- CRM:
+  - `POST /api/admin/customers/[userId]/notify`
+- Vendors:
+  - `GET/POST /api/admin/vendors`
+  - `PATCH /api/admin/vendors/[vendorId]/approval`
+  - `GET /api/vendor/dashboard/summary`
+- Catalog/Banners:
+  - `GET/POST /api/admin/categories`
+  - `GET/POST /api/admin/banners`
 
-## 8. API-Ready Structure
-- `GET /api/admin/control-tower/summary`
-  - Returns connected module KPIs + gateway health + sync health + rules + event feed.
-- `GET /api/admin/control-tower/stream`
-  - Live SSE stream for operation events.
-- Existing domain APIs:
-  - `/api/create-order`, `/api/verify-payment`, `/api/orders/stripe/confirm`
-  - `/api/admin/orders/*`, `/api/admin/transactions`, `/api/admin/settings`
+## 8. Role and Access Model
+- Roles:
+  - `super_admin`, `admin`, `manager`, `staff`, `vendor`, `user`
+- Fine-grained permissions:
+  - `vendors:manage`, `catalog:manage`, `banners:manage`, `analytics:view`, and existing admin scopes
+- Pattern-based role assignment:
+  - admin/manager/staff/vendor email lists and pattern matchers
 
-## 9. Component System
-- Admin shell:
-  - Sidebar, topbar, permission-gated routes.
-- Dashboard primitives:
-  - KPI cards, charts, status pills, data tables.
-- New connected module:
-  - **Control Tower** (`/admin/control-tower`) for operations command center.
-
-## 10. Security + Access Control
-- Session-based auth with role + permission checks.
-- Audit and activity logs for admin actions.
-- Pattern-based role assignment available for scaling team onboarding:
-  - `ADMIN_EMAIL_PATTERNS`, `STAFF_EMAIL_PATTERNS`
-
-## 11. Startup-to-SaaS Scalability Path
+## 9. SaaS Scalability Path
 - Near-term:
-  - Move automation execution to queue workers (BullMQ / PubSub).
-  - Add outbox pattern for guaranteed event delivery.
+  - queue-backed automation workers + retry policies
+  - webhook outbox with signed delivery
 - Mid-term:
-  - Warehouse/fulfillment service split.
-  - Payment orchestration service with smart routing/fallback.
+  - warehouse and fulfillment microservices
+  - smart payment routing with gateway failover scoring
 - Long-term:
-  - Multi-tenant workspace isolation + plugin marketplace runtime.
-  - Forecasting, dynamic pricing, and delivery ETA ML services.
+  - tenant isolation
+  - plugin marketplace SDK
+  - ML services for forecasting, recommendations, and pricing optimization

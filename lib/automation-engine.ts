@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { LOW_STOCK_THRESHOLD } from "@/lib/constants";
-import { reserveInventoryForOrder, updateOrderShipping } from "@/lib/firebase/firestore";
+import { getProductById, reserveInventoryForOrder, updateOrderShipping } from "@/lib/firebase/firestore";
 import { publishSystemEvent } from "@/lib/system-events";
 import { AutomationRule, Order, ShippingDetails } from "@/types";
 
@@ -93,6 +93,27 @@ export async function runPostPaymentAutomation(order: Order, input: { provider: 
       severity: "warning",
       orderId: order.id,
       payload: { ...item },
+    });
+  }
+
+  const vendorIds = new Set<string>();
+  for (const item of order.items) {
+    const product = await getProductById(item.productId);
+    if (product?.vendorId) {
+      vendorIds.add(product.vendorId);
+    }
+  }
+
+  for (const vendorId of vendorIds) {
+    await publishSystemEvent({
+      type: "vendor_notified",
+      module: "vendors",
+      source: "automation:post-payment",
+      orderId: order.id,
+      payload: {
+        vendorId,
+        reason: "new_order_assigned",
+      },
     });
   }
 

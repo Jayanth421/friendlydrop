@@ -8,7 +8,7 @@ import { NAV_LINKS } from "@/lib/constants";
 import { useCartStore } from "@/store/use-cart-store";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { isAdminRole } from "@/lib/rbac";
+import { isAdminRole, isVendorRole } from "@/lib/rbac";
 
 export function Navbar() {
   const items = useCartStore((state) => state.items);
@@ -41,6 +41,11 @@ export function Navbar() {
           {isAdminRole(role) ? (
             <Link href="/admin/dashboard" className="inline-flex items-center gap-1 text-sm font-semibold text-ink">
               <ShieldCheck className="h-4 w-4" /> Admin
+            </Link>
+          ) : null}
+          {isVendorRole(role) ? (
+            <Link href="/vendor/dashboard" className="inline-flex items-center gap-1 text-sm font-semibold text-ink">
+              <ShieldCheck className="h-4 w-4" /> Vendor
             </Link>
           ) : null}
         </nav>

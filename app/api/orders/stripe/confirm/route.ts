@@ -5,6 +5,7 @@ import { getStripeInstance } from "@/lib/payments/stripe";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { sendOrderEmail } from "@/lib/email";
 import { runPostPaymentAutomation } from "@/lib/automation-engine";
+import { isAdminRole } from "@/lib/rbac";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
       finalizedOrderId?: string;
     };
 
-    if (pending.userId !== user.uid && !(user.role === "admin" || user.role === "super_admin" || user.role === "staff")) {
+    if (pending.userId !== user.uid && !isAdminRole(user.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

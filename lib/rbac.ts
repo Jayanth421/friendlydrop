@@ -2,7 +2,11 @@ import { AdminPermission, UserRole } from "@/types";
 
 const ALL_PERMISSIONS: AdminPermission[] = [
   "dashboard:view",
+  "analytics:view",
   "products:manage",
+  "catalog:manage",
+  "vendors:manage",
+  "banners:manage",
   "orders:manage",
   "users:manage",
   "reviews:manage",
@@ -20,6 +24,7 @@ const ALL_PERMISSIONS: AdminPermission[] = [
 
 const STAFF_PERMISSIONS: AdminPermission[] = [
   "dashboard:view",
+  "analytics:view",
   "orders:manage",
   "users:manage",
   "reviews:manage",
@@ -32,15 +37,30 @@ const STAFF_PERMISSIONS: AdminPermission[] = [
 const ADMIN_PERMISSIONS: AdminPermission[] = [
   ...STAFF_PERMISSIONS,
   "products:manage",
+  "catalog:manage",
+  "banners:manage",
   "coupons:manage",
   "reports:export",
   "marketing:manage",
   "logs:view",
 ];
 
+const MANAGER_PERMISSIONS: AdminPermission[] = [
+  ...STAFF_PERMISSIONS,
+  "products:manage",
+  "catalog:manage",
+  "vendors:manage",
+  "banners:manage",
+  "coupons:manage",
+  "marketing:manage",
+  "reports:export",
+];
+
 const ROLE_PERMISSIONS: Record<UserRole, AdminPermission[]> = {
   user: [],
+  vendor: [],
   staff: STAFF_PERMISSIONS,
+  manager: MANAGER_PERMISSIONS,
   admin: ADMIN_PERMISSIONS,
   super_admin: ALL_PERMISSIONS,
 };
@@ -58,5 +78,9 @@ export function hasPermission(role: UserRole, permission: AdminPermission) {
 }
 
 export function isAdminRole(role: UserRole) {
-  return role === "staff" || role === "admin" || role === "super_admin";
+  return role === "staff" || role === "manager" || role === "admin" || role === "super_admin";
+}
+
+export function isVendorRole(role: UserRole) {
+  return role === "vendor";
 }

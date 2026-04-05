@@ -67,6 +67,7 @@ export const productSchema = z.object({
       metaDescription: z.string().optional(),
     })
     .optional(),
+  vendorId: z.string().optional(),
 });
 
 export const couponValidationSchema = z.object({
@@ -116,7 +117,7 @@ export const refundSchema = z.object({
 });
 
 export const adminRoleSchema = z.object({
-  role: z.enum(["user", "staff", "admin", "super_admin"]),
+  role: z.enum(["user", "vendor", "staff", "manager", "admin", "super_admin"]),
 });
 
 export const userStatusSchema = z.object({
@@ -160,6 +161,61 @@ export const campaignSchema = z.object({
   channel: z.enum(["email", "push", "banner"]),
   status: z.enum(["draft", "scheduled", "running", "completed"]),
   audience: z.enum(["all", "new", "repeat", "vip"]),
+  offerType: z.enum(["percent", "flat", "flash"]).optional(),
+  offerValue: z.number().nonnegative().optional(),
+  startsAt: z.string().datetime().optional(),
+  endsAt: z.string().datetime().optional(),
+});
+
+export const vendorSchema = z.object({
+  businessName: z.string().min(2),
+  ownerName: z.string().min(2),
+  email: z.string().email(),
+  phone: z.string().min(8),
+  commissionPercent: z.number().min(0).max(100),
+  status: z.enum(["pending", "approved", "rejected", "suspended"]).optional(),
+  kycVerified: z.boolean().optional(),
+});
+
+export const vendorApprovalSchema = z.object({
+  status: z.enum(["approved", "rejected", "suspended"]),
+  note: z.string().max(240).optional(),
+});
+
+export const bannerSchema = z.object({
+  title: z.string().min(2),
+  type: z.enum(["hero", "offer", "category"]),
+  imageDesktop: z.string().url(),
+  imageMobile: z.string().url().optional(),
+  linkType: z.enum(["product", "category", "external"]),
+  linkTarget: z.string().min(1),
+  position: z.number().int().min(0).default(0),
+  active: z.boolean().default(true),
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().optional(),
+  linkedCampaignId: z.string().optional(),
+});
+
+export const categorySchema = z.object({
+  name: z.string().min(2),
+  slug: z.string().min(2),
+  description: z.string().max(500).optional(),
+  image: z.string().url().optional(),
+  parentId: z.string().nullable().optional(),
+  level: z.number().int().min(0).default(0),
+  tags: z.array(z.string()).optional(),
+  seo: z
+    .object({
+      metaTitle: z.string().optional(),
+      metaDescription: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const customerNotifySchema = z.object({
+  channel: z.enum(["email", "sms", "whatsapp", "push"]),
+  subject: z.string().min(2).optional(),
+  message: z.string().min(2),
 });
 
 export const financeExpenseSchema = z.object({

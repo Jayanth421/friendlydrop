@@ -52,12 +52,28 @@ function resolveRole(email: string): UserRole {
     return "admin";
   }
 
+  if (getEmails("MANAGER_EMAILS").includes(normalized)) {
+    return "manager";
+  }
+
+  if (matchesAnyPattern(normalized, "MANAGER_EMAIL_PATTERNS")) {
+    return "manager";
+  }
+
   if (getEmails("STAFF_EMAILS").includes(normalized)) {
     return "staff";
   }
 
   if (matchesAnyPattern(normalized, "STAFF_EMAIL_PATTERNS")) {
     return "staff";
+  }
+
+  if (getEmails("VENDOR_EMAILS").includes(normalized)) {
+    return "vendor";
+  }
+
+  if (matchesAnyPattern(normalized, "VENDOR_EMAIL_PATTERNS")) {
+    return "vendor";
   }
 
   return "user";

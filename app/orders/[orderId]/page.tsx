@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getOrder } from "@/lib/firebase/firestore";
+import { isAdminRole } from "@/lib/rbac";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { OrderTracker } from "@/components/shared/order-tracker";
 
@@ -8,7 +9,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
   const user = await requireUser();
   const order = await getOrder(params.orderId);
 
-  if (!order || (order.userId !== user.uid && !(user.role === "admin" || user.role === "super_admin" || user.role === "staff"))) {
+  if (!order || (order.userId !== user.uid && !isAdminRole(user.role))) {
     notFound();
   }
 

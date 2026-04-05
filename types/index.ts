@@ -1,8 +1,12 @@
-export type UserRole = "user" | "staff" | "admin" | "super_admin";
+export type UserRole = "user" | "vendor" | "staff" | "manager" | "admin" | "super_admin";
 
 export type AdminPermission =
   | "dashboard:view"
+  | "analytics:view"
   | "products:manage"
+  | "catalog:manage"
+  | "vendors:manage"
+  | "banners:manage"
   | "orders:manage"
   | "users:manage"
   | "reviews:manage"
@@ -44,6 +48,7 @@ export type SystemEventType =
   | "payment_failed"
   | "order_confirmed"
   | "order_status_updated"
+  | "vendor_notified"
   | "inventory_reserved"
   | "low_stock_alert"
   | "delivery_assigned"
@@ -57,12 +62,19 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
+  phone?: string;
+  addresses?: Address[];
   role: UserRole;
   status?: UserStatus;
   segment?: CustomerSegment;
+  loyaltyPoints?: number;
+  walletBalance?: number;
+  referralCount?: number;
   totalSpend?: number;
   orderCount?: number;
   notes?: string[];
+  lastCartActivityAt?: string;
+  purchasePatterns?: string[];
   lastLoginAt?: string;
   twoFactorEnabled?: boolean;
   createdAt: string;
@@ -104,6 +116,7 @@ export interface Product {
   status?: ProductStatus;
   visibility?: ProductVisibility;
   seo?: SeoMeta;
+  vendorId?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -178,7 +191,7 @@ export interface SystemEvent {
   type: SystemEventType;
   severity: EventSeverity;
   source: string;
-  module: "orders" | "payments" | "delivery" | "inventory" | "customers" | "automation" | "system";
+  module: "orders" | "payments" | "delivery" | "inventory" | "customers" | "vendors" | "marketing" | "catalog" | "automation" | "system";
   orderId?: string;
   userId?: string;
   actorId?: string;
@@ -193,6 +206,64 @@ export interface AutomationRule {
   enabled: boolean;
   triggerEvent: SystemEventType;
   actions: string[];
+}
+
+export interface VendorProfile {
+  id: string;
+  businessName: string;
+  ownerName: string;
+  email: string;
+  phone: string;
+  status: "pending" | "approved" | "rejected" | "suspended";
+  commissionPercent: number;
+  rating?: number;
+  totalSales?: number;
+  orderCount?: number;
+  kycVerified?: boolean;
+  documents?: Array<{ name: string; url: string; type: "gst" | "pan" | "aadhaar" | "other" }>;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface VendorPayout {
+  id: string;
+  vendorId: string;
+  amount: number;
+  status: "pending" | "completed" | "failed";
+  periodLabel: string;
+  createdAt: string;
+  processedAt?: string;
+}
+
+export interface BannerItem {
+  id: string;
+  title: string;
+  type: "hero" | "offer" | "category";
+  imageDesktop: string;
+  imageMobile?: string;
+  linkType: "product" | "category" | "external";
+  linkTarget: string;
+  position: number;
+  active: boolean;
+  startAt?: string;
+  endAt?: string;
+  linkedCampaignId?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CatalogCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  image?: string;
+  parentId?: string | null;
+  level: number;
+  tags?: string[];
+  seo?: SeoMeta;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Coupon {

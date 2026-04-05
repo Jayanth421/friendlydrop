@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { ADMIN_2FA_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/lib/constants";
 import { getAdminAuth } from "@/lib/firebase/admin";
 import { getUserById } from "@/lib/firebase/firestore";
-import { hasPermission, isAdminRole } from "@/lib/rbac";
+import { hasPermission, isAdminRole, isVendorRole } from "@/lib/rbac";
 import { AdminPermission, UserRole } from "@/types";
 
 export interface RequestUser {
@@ -64,6 +64,16 @@ export async function requireApiPermission(request: NextRequest, permission: Adm
   const user = await requireApiAdmin(request);
 
   if (!hasPermission(user.role, permission)) {
+    throw new Error("FORBIDDEN");
+  }
+
+  return user;
+}
+
+export async function requireApiVendorOrAdmin(request: NextRequest) {
+  const user = await requireApiUser(request);
+
+  if (!(isVendorRole(user.role) || isAdminRole(user.role))) {
     throw new Error("FORBIDDEN");
   }
 

@@ -28,7 +28,9 @@ export function UserRoleUpdater({ userId, currentRole }: { userId: string; curre
   return (
     <select value={role} onChange={(event) => onChange(event.target.value as UserRole)} className="h-9 rounded-md border border-slate-200 px-2 text-sm">
       <option value="user">user</option>
+      <option value="vendor">vendor</option>
       <option value="staff">staff</option>
+      <option value="manager">manager</option>
       <option value="admin">admin</option>
       <option value="super_admin">super admin</option>
     </select>

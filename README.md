@@ -22,17 +22,21 @@ Enterprise-grade full-stack eCommerce platform for custom photo prints, stickers
 - Custom image uploads for personalized orders
 
 ### Enterprise Admin Dashboard
-- RBAC roles: `super_admin`, `admin`, `staff`
+- RBAC roles: `super_admin`, `admin`, `manager`, `staff`, `vendor`
 - Permission-based route/API protection
 - Optional admin 2FA verification flow
 - Session/device tracking for admin logins
 - Activity logs + audit logs
 - Advanced analytics dashboard (daily/weekly/monthly trends)
+- Control Tower (event-driven, real-time operational command center)
 - Revenue by category, best sellers, top customers, low stock alerts
 - Product management with SEO fields, visibility, status, bulk CSV upload
+- Catalog/category management (nested hierarchy + tags + SEO fields)
+- Vendor onboarding, approval workflow, commission and payout visibility
+- Banner/homepage management with campaign linkage
 - Order lifecycle management (pending -> confirmed -> packed -> shipped -> delivered -> returned/refunded)
 - Shipping/tracking updates + invoice PDF download
-- Customer segmentation, status controls, internal notes
+- Customer segmentation, status controls, internal notes, CRM notifications
 - Upload moderation (approve/reject/flag)
 - Payments/transactions panel
 - Coupon engine
@@ -74,9 +78,13 @@ Required groups:
 - Role assignment:
   - `SUPER_ADMIN_EMAILS`
   - `ADMIN_EMAILS`
+  - `MANAGER_EMAILS`
   - `ADMIN_EMAIL_PATTERNS` (comma-separated fragments or domains like `friendlydrop` or `@friendlydrop.in`)
+  - `MANAGER_EMAIL_PATTERNS`
   - `STAFF_EMAILS`
   - `STAFF_EMAIL_PATTERNS` (optional comma-separated fragments/domains for staff access)
+  - `VENDOR_EMAILS`
+  - `VENDOR_EMAIL_PATTERNS`
 - Optional enterprise integrations:
   - `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`
   - `SHIPROCKET_API_BASE_URL`, `SHIPROCKET_API_TOKEN`
@@ -118,6 +126,7 @@ npm run build
 - `users`, `products`, `orders`, `transactions`
 - `cart`, `wishlist`, `uploads`, `reviews`, `coupons`
 - `supportTickets`, `returns`, `campaigns`, `expenses`, `settings`
+- `vendors`, `vendorPayouts`, `banners`, `categories`, `systemEvents`
 - `activityLogs`, `auditLogs`, `admin2faChallenges`, `adminSessions`
 
 ## Deployment (Vercel)

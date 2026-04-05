@@ -13,7 +13,7 @@ export interface GatewayMetric {
 }
 
 export interface ModuleSyncHealth {
-  module: "orders" | "payments" | "delivery" | "inventory" | "customers" | "automation";
+  module: "orders" | "payments" | "delivery" | "inventory" | "customers" | "vendors" | "marketing" | "catalog" | "automation";
   lastEventAt: string | null;
   status: "healthy" | "warning";
 }
@@ -69,7 +69,7 @@ function buildGatewayMetrics(transactions: Awaited<ReturnType<typeof getTransact
 }
 
 function buildModuleSync(events: SystemEvent[]): ModuleSyncHealth[] {
-  const modules: ModuleSyncHealth["module"][] = ["orders", "payments", "delivery", "inventory", "customers", "automation"];
+  const modules: ModuleSyncHealth["module"][] = ["orders", "payments", "delivery", "inventory", "customers", "vendors", "marketing", "catalog", "automation"];
   const now = Date.now();
 
   return modules.map((module) => {
