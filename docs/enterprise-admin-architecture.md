@@ -1,93 +1,107 @@
 # Enterprise Admin Dashboard Blueprint
 
-## 1. Platform Model
-- **Frontend**: Next.js App Router with admin and vendor workspaces.
-- **Core Domains**: Orders, Payments, Delivery, Inventory, Customers, Vendors, Catalog, Marketing, Banners, Analytics, Automation.
-- **Real-time Layer**: SSE stream (`/api/admin/control-tower/stream`) + snapshot endpoint (`/api/admin/control-tower/summary`).
-- **Persistence**: Firestore domain collections + `systemEvents` event timeline.
+## 1. Core Connected Architecture
+- Unified control plane:
+  - Orders, Payments, Delivery, Inventory, Customers, Vendors, Marketing, Analytics
+- Event-driven orchestration:
+  - `checkout_initiated` -> `payment_succeeded` -> `order_confirmed` -> `inventory_reserved` -> `vendor_notified` -> `delivery_assigned`
+- Real-time feeds:
+  - Control Tower summary + SSE stream for cross-module health and KPI signals
+- Persistence:
+  - Firestore domain collections (`orders`, `transactions`, `users`, `products`, `vendors`, `campaigns`, `settings`, `plugins`, `cmsPages`, `systemEvents`)
 
-## 2. Connected Event Graph
-- `checkout_initiated` -> pricing snapshot locked
-- `payment_succeeded` -> order confirmed
-- `order_confirmed` -> inventory reserved
-- `inventory_reserved` -> low stock event (if threshold hit)
-- `vendor_notified` -> seller visibility + downstream fulfillment
-- `delivery_assigned` -> tracking + ETA
-- `automation_rule_executed` -> audit trail
+## 2. Order, Payment, Delivery Flow
+- Order lifecycle:
+  - pending / confirmed / packed / shipped / delivered / returned / cancelled / refunded
+- Automated chain:
+  - payment success -> optional auto-confirm -> inventory reserve -> vendor notification -> optional auto-delivery assignment
+- Payment control:
+  - gateway enable/disable, order value guardrails, smart fallback routing, COD constraints
+- Delivery rules:
+  - zone + distance + speed + subtotal + free-shipping rules evaluated at checkout in real time
 
-Canonical chain:
-**Orders <-> Payments <-> Delivery <-> Inventory <-> Customers <-> Vendors**
+## 3. Delivery Operations
+- Delivery Rules Engine in admin settings:
+  - base fee, express/same-day surcharges, SLA windows, max radius
+  - zone definitions (local/regional/national with pincode and city matching)
+  - pricing rule priority stack
+  - free delivery conditions (value, segment, campaign, first order)
+- Delivery command center:
+  - shipment table, tracking/ETA visibility, delay monitoring
 
-## 3. Customer CRM Domain
-- Unified customer view:
-  - profile, spend, order/payment counts, loyalty points, wallet balance
-- Segmentation:
-  - new / repeat / VIP
-- Actions:
-  - block/unblock, role controls, notes, notifications (email/SMS/WhatsApp/push channels)
-- Support integration:
-  - open ticket load included in CRM snapshot
+## 4. Payments and Settlements
+- Payment methods:
+  - UPI/cards/net banking/COD/wallet toggles
+  - Razorpay/Stripe/PayPal gateway toggles
+- Rules:
+  - min/max order limits, COD max and blocked pincodes, retry + fallback flags
+- Refund and settlement:
+  - return/refund workflows + transaction ledger + vendor payout surfaces
 
-## 4. Vendor Domain
-- Vendor onboarding endpoint + approval workflow
-- KYC and status states:
-  - pending / approved / rejected / suspended
-- Commission-aware seller profile
-- Payout stream:
-  - pending/completed settlement records
-- Vendor dashboard:
-  - order volume, revenue, payouts, recent orders
+## 5. Integration and Webhook Layer
+- Integration panel:
+  - provider registry with env-key references, mode (test/live), health status
+- API and webhook logs:
+  - request/response/error logs
+  - webhook delivery history with retries and response codes
+- Plugin system:
+  - install/disable/uninstall apps with provider metadata and endpoint config
 
-## 5. Catalog + Banner + Marketing Domain
-- Nested category model with parent/level hierarchy
-- Catalog SEO fields + tags
-- Banner scheduler model:
-  - hero/offer/category banners
-  - desktop/mobile assets
-  - campaign linking
-- Campaign linkage:
-  - marketing status and banner activation are structurally connected
-
-## 6. Automation Engine
-- Active workflow rules:
-  - payment success -> confirm -> reserve -> assign delivery
-  - low stock alert generation
-  - delivery failed reassignment hook
-- Additional automation-ready endpoints:
-  - customer notify
-  - vendor approval updates
-  - catalog/banner upserts publishing system events
-
-## 7. API-Ready Surface
-- Control Tower:
-  - `GET /api/admin/control-tower/summary`
-  - `GET /api/admin/control-tower/stream`
+## 6. CRM + Vendor + Catalog + Marketing
 - CRM:
-  - `POST /api/admin/customers/[userId]/notify`
-- Vendors:
-  - `GET/POST /api/admin/vendors`
-  - `PATCH /api/admin/vendors/[vendorId]/approval`
-  - `GET /api/vendor/dashboard/summary`
-- Catalog/Banners:
-  - `GET/POST /api/admin/categories`
-  - `GET/POST /api/admin/banners`
+  - full profile, segment, loyalty, wallet, notes, notification actions, support linkage
+- Vendor:
+  - onboarding, approval, payout summaries, vendor dashboard
+- Catalog:
+  - categories, nested structure, SEO fields, tags, product-to-vendor link
+- Marketing + banners:
+  - campaigns, audience targeting, offer scheduling, banner linkage
 
-## 8. Role and Access Model
-- Roles:
+## 7. CMS, Mobile, and Automation/AI
+- CMS manager:
+  - static business pages (about/policies/blog scaffolding), publish status, SEO metadata
+- Mobile control panel:
+  - app feature toggles, push control, forced update versions, home layout preset
+- Automation center:
+  - IF/THEN rule table
+  - AI toggles for demand forecasting, fraud detection, pricing, recommendations
+  - sandbox and A/B testing toggles
+
+## 8. Security and Control
+- RBAC roles:
   - `super_admin`, `admin`, `manager`, `staff`, `vendor`, `user`
-- Fine-grained permissions:
-  - `vendors:manage`, `catalog:manage`, `banners:manage`, `analytics:view`, and existing admin scopes
-- Pattern-based role assignment:
-  - admin/manager/staff/vendor email lists and pattern matchers
+- Controls:
+  - maintenance mode, checkout toggle, GST toggle, auto-confirm toggle, auto-assignment toggle
+- Auditability:
+  - system events, activity logs, audit logs
+- Auth:
+  - admin/session checks + role resolution via email and pattern assignment
 
-## 9. SaaS Scalability Path
-- Near-term:
-  - queue-backed automation workers + retry policies
-  - webhook outbox with signed delivery
-- Mid-term:
-  - warehouse and fulfillment microservices
-  - smart payment routing with gateway failover scoring
-- Long-term:
-  - tenant isolation
-  - plugin marketplace SDK
-  - ML services for forecasting, recommendations, and pricing optimization
+## 9. API Surface (Production-Ready Scaffolding)
+- Settings:
+  - `GET/PUT /api/admin/settings`
+- Checkout controls:
+  - `GET /api/checkout/config`
+  - `POST /api/create-order`
+  - `POST /api/verify-payment`
+- Plugins:
+  - `GET/POST /api/admin/plugins`
+  - `PATCH /api/admin/plugins/[pluginId]`
+- Mobile:
+  - `GET/PUT /api/admin/mobile-controls`
+- Automation:
+  - `GET/PUT /api/admin/automation`
+- CMS:
+  - `GET/POST /api/admin/cms`
+- Integrations/logs:
+  - `GET /api/admin/integrations/logs`
+- Vendors, catalog, banners, CRM notifications:
+  - existing admin APIs retained and connected
+
+## 10. SaaS Scalability Path
+- Immediate:
+  - background jobs for retries and asynchronous webhook outbox
+- Next:
+  - multi-warehouse service + split-order allocation engine
+- Advanced:
+  - tenant isolation, plugin SDK contracts, model-serving endpoints for AI predictions

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth/api";
-import { createOrder, getOrder, saveCart } from "@/lib/firebase/firestore";
+import { createOrder, getOrder, getStoreSettings, saveCart } from "@/lib/firebase/firestore";
 import { getStripeInstance } from "@/lib/payments/stripe";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { sendOrderEmail } from "@/lib/email";
@@ -84,6 +84,9 @@ export async function GET(request: NextRequest) {
     const taxAmount = pending.totals.taxAmount ?? 0;
     const deliveryFee = pending.totals.deliveryFee ?? 0;
 
+    const settings = await getStoreSettings();
+    const status = settings.operations.autoOrderConfirm ? "confirmed" : "pending";
+
     const order = await createOrder({
       userId: pending.userId,
       items: pending.orderDraft.items,
@@ -94,7 +97,7 @@ export async function GET(request: NextRequest) {
       taxAmount,
       deliveryFee,
       paymentId: session.payment_intent?.toString() ?? session.id,
-      status: "confirmed",
+      status,
       address: pending.orderDraft.address,
       couponCode: pending.orderDraft.couponCode,
       discountAmount,

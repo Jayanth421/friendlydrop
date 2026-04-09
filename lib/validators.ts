@@ -50,11 +50,15 @@ export const productSchema = z.object({
   name: z.string().min(2),
   description: z.string().min(10),
   price: z.number().min(1),
+  discountPercent: z.number().min(0).max(90).optional(),
   images: z.array(z.string().url()).min(1),
   category: z.enum(["photo-prints", "stickers", "personalized-gifts"]),
   subcategory: z.string().optional(),
   stock: z.number().int().min(0),
   sku: z.string().optional(),
+  brand: z.string().optional(),
+  weightGrams: z.number().min(0).optional(),
+  attributes: z.record(z.string()).optional(),
   variants: z.array(productVariantSchema).optional(),
   tags: z.array(z.string()).optional(),
   featured: z.boolean().optional(),
@@ -65,6 +69,11 @@ export const productSchema = z.object({
     .object({
       metaTitle: z.string().optional(),
       metaDescription: z.string().optional(),
+      imageAlt: z.string().optional(),
+      canonicalUrl: z.string().url().optional(),
+      keywords: z.array(z.string()).optional(),
+      noindex: z.boolean().optional(),
+      nofollow: z.boolean().optional(),
     })
     .optional(),
   vendorId: z.string().optional(),
@@ -224,6 +233,96 @@ export const financeExpenseSchema = z.object({
   note: z.string().max(240).optional(),
 });
 
+const deliveryPricingRuleSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(2),
+  enabled: z.boolean(),
+  priority: z.number().int().min(0),
+  speed: z.enum(["standard", "express", "same_day"]).optional(),
+  minDistanceKm: z.number().min(0).optional(),
+  maxDistanceKm: z.number().min(0).optional(),
+  minOrderValue: z.number().min(0).optional(),
+  maxOrderValue: z.number().min(0).optional(),
+  minWeightKg: z.number().min(0).optional(),
+  maxWeightKg: z.number().min(0).optional(),
+  zoneIds: z.array(z.string()).optional(),
+  flatFee: z.number().min(0),
+  perKmFee: z.number().min(0),
+});
+
+const freeDeliveryRuleSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(2),
+  enabled: z.boolean(),
+  minOrderValue: z.number().min(0).optional(),
+  productIds: z.array(z.string()).optional(),
+  categoryIds: z.array(z.string()).optional(),
+  firstOrderOnly: z.boolean().optional(),
+  customerSegments: z.array(z.enum(["new", "repeat", "vip"])).optional(),
+  startsAt: z.string().datetime().optional(),
+  endsAt: z.string().datetime().optional(),
+  campaignIds: z.array(z.string()).optional(),
+});
+
+const deliveryZoneSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(2),
+  type: z.enum(["local", "regional", "national"]),
+  enabled: z.boolean(),
+  cities: z.array(z.string()).optional(),
+  pincodePrefixes: z.array(z.string()).optional(),
+  baseFee: z.number().min(0),
+  expressSurcharge: z.number().min(0),
+});
+
+const paymentMethodsSchema = z.object({
+  upi: z.boolean(),
+  cards: z.boolean(),
+  netBanking: z.boolean(),
+  cod: z.boolean(),
+  wallet: z.boolean(),
+  razorpay: z.boolean(),
+  stripe: z.boolean(),
+  paypal: z.boolean(),
+});
+
+const paymentRulesSchema = z.object({
+  minOrderValue: z.number().min(0),
+  maxOrderValue: z.number().min(0),
+  codMaxOrderValue: z.number().min(0),
+  codBlockedPincodes: z.array(z.string()),
+  retryEnabled: z.boolean(),
+  maxRetries: z.number().int().min(0).max(10),
+  smartFallbackEnabled: z.boolean(),
+  autoRefundOnReturnApproval: z.boolean(),
+  partialRefundsEnabled: z.boolean(),
+});
+
+const integrationProviderSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(2),
+  type: z.enum(["payment", "shipping", "notification", "analytics", "other"]),
+  enabled: z.boolean(),
+  mode: z.enum(["test", "live"]),
+  keyRef: z.string().min(1),
+  secretRef: z.string().optional(),
+  healthStatus: z.enum(["active", "failed", "disabled", "unknown"]),
+  lastCheckedAt: z.string().datetime().optional(),
+  lastError: z.string().optional(),
+  endpoint: z.string().url().optional(),
+});
+
+const webhookSchema = z.object({
+  id: z.string().min(1),
+  event: z.enum(["payment_success", "order_updated", "delivery_updated"]),
+  url: z.string().url().or(z.literal("")),
+  enabled: z.boolean(),
+  retryFailed: z.boolean(),
+  maxRetries: z.number().int().min(0).max(10),
+  lastStatus: z.enum(["idle", "success", "failed"]),
+  lastTriggeredAt: z.string().datetime().optional(),
+});
+
 export const storeSettingsSchema = z.object({
   storeName: z.string().min(2),
   supportEmail: z.string().email(),
@@ -232,6 +331,44 @@ export const storeSettingsSchema = z.object({
   deliveryFee: z.number().min(0).max(10000),
   currency: z.string().min(2),
   themeColor: z.string().min(3),
+  delivery: z.object({
+    enabled: z.boolean(),
+    expressEnabled: z.boolean(),
+    sameDayEnabled: z.boolean(),
+    maxRadiusKm: z.number().min(1).max(10000),
+    slaStandardHours: z.number().int().min(1).max(720),
+    slaExpressHours: z.number().int().min(1).max(720),
+    blockedPincodes: z.array(z.string()),
+    baseFee: z.number().min(0),
+    expressSurcharge: z.number().min(0),
+    sameDaySurcharge: z.number().min(0),
+    pricingRules: z.array(deliveryPricingRuleSchema),
+    freeDeliveryRules: z.array(freeDeliveryRuleSchema),
+    zones: z.array(deliveryZoneSchema),
+  }),
+  payments: z.object({
+    systemEnabled: z.boolean(),
+    methods: paymentMethodsSchema,
+    rules: paymentRulesSchema,
+  }),
+  integrations: z.object({
+    defaultMode: z.enum(["test", "live"]),
+    providers: z.array(integrationProviderSchema),
+    webhooks: z.array(webhookSchema),
+  }),
+  operations: z.object({
+    maintenanceMode: z.boolean(),
+    checkoutEnabled: z.boolean(),
+    taxEnabled: z.boolean(),
+    autoOrderConfirm: z.boolean(),
+    autoDeliveryAssignment: z.boolean(),
+  }),
+  alerts: z.object({
+    paymentFailureRateThreshold: z.number().min(1).max(100),
+    deliveryDelayThreshold: z.number().min(1).max(100),
+    apiLatencyThresholdMs: z.number().min(100).max(60000),
+    refundRateThreshold: z.number().min(1).max(100),
+  }),
 });
 
 export const twoFactorRequestSchema = z.object({
@@ -240,4 +377,124 @@ export const twoFactorRequestSchema = z.object({
 
 export const twoFactorVerifySchema = z.object({
   code: z.string().length(6),
+});
+
+export const pluginAppSchema = z.object({
+  name: z.string().min(2),
+  slug: z.string().min(2),
+  provider: z.string().min(2),
+  version: z.string().min(1),
+  category: z.enum(["marketing", "shipping", "payments", "analytics", "operations", "other"]),
+  status: z.enum(["installed", "disabled", "uninstalled"]).optional(),
+  apiEndpoint: z.string().url().optional(),
+  webhookEndpoint: z.string().url().optional(),
+});
+
+export const pluginAppUpdateSchema = z.object({
+  status: z.enum(["installed", "disabled", "uninstalled"]).optional(),
+  version: z.string().min(1).optional(),
+  apiEndpoint: z.string().url().optional(),
+  webhookEndpoint: z.string().url().optional(),
+});
+
+export const mobileAppControlSchema = z.object({
+  appEnabled: z.boolean(),
+  pushNotificationsEnabled: z.boolean(),
+  forceUpdateAndroidVersion: z.string().optional(),
+  forceUpdateIosVersion: z.string().optional(),
+  showWishlist: z.boolean(),
+  showWallet: z.boolean(),
+  showReferrals: z.boolean(),
+  homeLayoutPreset: z.enum(["classic", "sale-first", "minimal"]),
+});
+
+export const automationCenterSchema = z.object({
+  aiDemandForecastingEnabled: z.boolean(),
+  aiFraudDetectionEnabled: z.boolean(),
+  aiSmartPricingEnabled: z.boolean(),
+  aiRecommendationsEnabled: z.boolean(),
+  sandboxMode: z.boolean(),
+  abTestingEnabled: z.boolean(),
+  automationRules: z.array(
+    z.object({
+      id: z.string().min(1),
+      name: z.string().min(2),
+      enabled: z.boolean(),
+      condition: z.string().min(2),
+      action: z.string().min(2),
+      priority: z.number().int().min(0),
+    }),
+  ),
+});
+
+export const cmsPageSchema = z.object({
+  title: z.string().min(2),
+  slug: z.string().min(2),
+  status: z.enum(["draft", "published"]),
+  seo: z
+    .object({
+      metaTitle: z.string().optional(),
+      metaDescription: z.string().optional(),
+    })
+    .optional(),
+});
+
+export const bulkImportRowsSchema = z.object({
+  rows: z.array(z.record(z.unknown())).min(1),
+  dryRun: z.boolean().optional(),
+  forceImport: z.boolean().optional(),
+});
+
+export const bulkProductActionSchema = z.object({
+  action: z.enum(["update_price", "update_discount", "change_category", "delete", "set_status", "update_stock"]),
+  productIds: z.array(z.string()).min(1),
+  value: z.unknown().optional(),
+});
+
+export const metaAdsConfigSchema = z.object({
+  connected: z.boolean(),
+  adAccountId: z.string().optional(),
+  businessId: z.string().optional(),
+  catalogId: z.string().optional(),
+  pixelId: z.string().optional(),
+  accessTokenRef: z.string().optional(),
+  syncEnabled: z.boolean(),
+  testMode: z.boolean(),
+});
+
+export const metaAdsCampaignSchema = z.object({
+  name: z.string().min(2),
+  type: z.enum(["conversion", "retargeting", "catalog"]),
+  status: z.enum(["draft", "active", "paused", "completed"]).optional(),
+  productIds: z.array(z.string()).min(1),
+  dailyBudget: z.number().min(100),
+});
+
+export const seoPlatformConfigSchema = z.object({
+  sitemapEnabled: z.boolean(),
+  robotsPolicy: z.enum(["index_follow", "index_nofollow", "noindex_follow", "noindex_nofollow"]),
+  pageSpeedMode: z.enum(["balanced", "performance", "quality"]),
+  schemaProductEnabled: z.boolean(),
+  schemaOrganizationEnabled: z.boolean(),
+  noindexCategorySlugs: z.array(z.string()),
+});
+
+export const socialShareConfigSchema = z.object({
+  whatsappEnabled: z.boolean(),
+  instagramEnabled: z.boolean(),
+  facebookEnabled: z.boolean(),
+  twitterEnabled: z.boolean(),
+  referralRewardsEnabled: z.boolean(),
+  rewardPointsPerReferral: z.number().min(0).max(10000),
+});
+
+export const createSocialShareLinkSchema = z.object({
+  productId: z.string().optional(),
+  platform: z.enum(["whatsapp", "instagram", "facebook", "twitter"]),
+});
+
+export const trackSocialShareClickSchema = z.object({
+  shareId: z.string().min(1),
+  converted: z.boolean().optional(),
+  revenue: z.number().min(0).optional(),
 });

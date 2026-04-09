@@ -23,7 +23,13 @@ interface ProductFormValues {
   popularity?: number;
   status?: "draft" | "published" | "archived";
   visibility?: "public" | "private";
-  seo?: { metaTitle?: string; metaDescription?: string };
+  seo?: {
+    metaTitle?: string;
+    metaDescription?: string;
+    imageAlt?: string;
+    canonicalUrl?: string;
+    keywords?: string[];
+  };
 }
 
 export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValues }) {
@@ -42,7 +48,7 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
       popularity: 80,
       status: "published",
       visibility: "public",
-      seo: { metaTitle: "", metaDescription: "" },
+      seo: { metaTitle: "", metaDescription: "", imageAlt: "", canonicalUrl: "", keywords: [] },
     },
   );
   const [imageUrl, setImageUrl] = useState("");
@@ -82,6 +88,14 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
     const method = defaultValues?.id ? "PATCH" : "POST";
     const url = defaultValues?.id ? `/api/admin/products/${defaultValues.id}` : "/api/admin/products";
 
+    const normalizedSeo = form.seo
+      ? {
+          ...form.seo,
+          canonicalUrl: form.seo.canonicalUrl?.trim() || undefined,
+          keywords: (form.seo.keywords ?? []).map((item) => item.trim()).filter(Boolean),
+        }
+      : undefined;
+
     const response = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -91,6 +105,7 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
         stock: Number(form.stock),
         popularity: Number(form.popularity),
         tags: (form.tags ?? []).filter(Boolean),
+        seo: normalizedSeo,
       }),
     });
 
@@ -149,6 +164,24 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
           placeholder="SEO Meta Description"
           value={form.seo?.metaDescription ?? ""}
           onChange={(event) => setForm({ ...form, seo: { ...(form.seo ?? {}), metaDescription: event.target.value } })}
+        />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Input
+          placeholder="SEO Image Alt"
+          value={form.seo?.imageAlt ?? ""}
+          onChange={(event) => setForm({ ...form, seo: { ...(form.seo ?? {}), imageAlt: event.target.value } })}
+        />
+        <Input
+          placeholder="Canonical URL"
+          value={form.seo?.canonicalUrl ?? ""}
+          onChange={(event) => setForm({ ...form, seo: { ...(form.seo ?? {}), canonicalUrl: event.target.value } })}
+        />
+        <Input
+          placeholder="SEO Keywords (comma separated)"
+          value={(form.seo?.keywords ?? []).join(",")}
+          onChange={(event) => setForm({ ...form, seo: { ...(form.seo ?? {}), keywords: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) } })}
         />
       </div>
 

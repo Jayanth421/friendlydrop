@@ -2,11 +2,12 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth/api";
 import { verifyRazorpaySchema, couponValidationSchema } from "@/lib/validators";
-import { createOrder, getCouponByCode, getProductById, getStoreSettings, saveCart } from "@/lib/firebase/firestore";
+import { createOrder, getCouponByCode, getProductById, getStoreSettings, getUserById, saveCart } from "@/lib/firebase/firestore";
 import { sendOrderEmail } from "@/lib/email";
 import { calculateCheckoutSummary } from "@/lib/checkout-pricing";
 import { publishSystemEvent } from "@/lib/system-events";
 import { runPostPaymentAutomation } from "@/lib/automation-engine";
+import { calculateDeliveryQuote, canUseGateway } from "@/lib/settings-engine";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,8 @@ async function buildSecureItems(items: Array<{ productId: string; quantity: numb
     price: number;
     quantity: number;
     image: string;
+    category: string;
+    weightKg: number;
     customImageUrl?: string;
   }> = [];
 
@@ -33,6 +36,8 @@ async function buildSecureItems(items: Array<{ productId: string; quantity: numb
       price: product.price,
       quantity: item.quantity,
       image: product.images[0],
+      category: product.category,
+      weightKg: Math.max(Number(product.weightGrams ?? 500) / 1000, 0.1),
       customImageUrl: item.customImageUrl,
     });
   }
@@ -40,14 +45,20 @@ async function buildSecureItems(items: Array<{ productId: string; quantity: numb
   return secureItems;
 }
 
-async function calculateTotal(items: Array<{ productId: string; quantity: number; customImageUrl?: string }>, couponCode?: string) {
-  const secureItems = await buildSecureItems(items);
+async function calculateTotal(input: {
+  userId: string;
+  items: Array<{ productId: string; quantity: number; customImageUrl?: string }>;
+  couponCode?: string;
+  priority?: "normal" | "express";
+  address: { postalCode?: string; city?: string };
+}) {
+  const secureItems = await buildSecureItems(input.items);
   const subtotal = secureItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   let discountAmount = 0;
 
-  if (couponCode) {
-    const normalized = couponValidationSchema.parse({ code: couponCode }).code;
+  if (input.couponCode) {
+    const normalized = couponValidationSchema.parse({ code: input.couponCode }).code;
     const coupon = await getCouponByCode(normalized);
     const isExpired = coupon?.expiresAt ? new Date(coupon.expiresAt).getTime() < Date.now() : false;
 
@@ -56,16 +67,41 @@ async function calculateTotal(items: Array<{ productId: string; quantity: number
     }
   }
 
-  const settings = await getStoreSettings();
+  const [settings, profile] = await Promise.all([getStoreSettings(), getUserById(input.userId)]);
+  const isFirstOrder = (profile?.orderCount ?? 0) === 0;
+  const gatewayCheck = canUseGateway(settings, "razorpay", {
+    subtotal,
+    postalCode: input.address.postalCode,
+    city: input.address.city,
+    speed: input.priority === "express" ? "express" : "standard",
+  });
+
+  if (!gatewayCheck.allowed) {
+    throw new Error(gatewayCheck.reason);
+  }
+
+  const deliveryQuote = calculateDeliveryQuote(settings, {
+    subtotal: Math.max(subtotal - discountAmount, 0),
+    postalCode: input.address.postalCode,
+    city: input.address.city,
+    speed: input.priority === "express" ? "express" : "standard",
+    customerSegment: profile?.segment,
+    isFirstOrder,
+    productIds: secureItems.map((item) => item.productId),
+    categoryIds: secureItems.map((item) => item.category),
+    weightKg: secureItems.reduce((sum, item) => sum + item.weightKg * item.quantity, 0),
+  });
+
   const summary = calculateCheckoutSummary({
     subtotal,
     discountAmount,
-    taxRate: settings.taxRate,
-    deliveryFee: settings.deliveryFee,
+    taxRate: settings.operations.taxEnabled ? settings.taxRate : 0,
+    deliveryFee: deliveryQuote.allowed ? deliveryQuote.fee : 0,
   });
 
   return {
     secureItems,
+    deliveryQuote,
     ...summary,
   };
 }
@@ -102,7 +138,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid payment signature" }, { status: 401 });
     }
 
-    const totals = await calculateTotal(payload.orderDraft.items, payload.orderDraft.couponCode);
+    const totals = await calculateTotal({
+      userId: user.uid,
+      items: payload.orderDraft.items,
+      couponCode: payload.orderDraft.couponCode,
+      priority: payload.orderDraft.priority,
+      address: {
+        postalCode: payload.orderDraft.address.postalCode,
+        city: payload.orderDraft.address.city,
+      },
+    });
+
+    const settings = await getStoreSettings();
+    const status = settings.operations.autoOrderConfirm ? "confirmed" : "pending";
 
     const order = await createOrder({
       userId: user.uid,
@@ -114,7 +162,7 @@ export async function POST(request: NextRequest) {
       taxAmount: totals.taxAmount,
       deliveryFee: totals.deliveryFee,
       paymentId: payload.razorpayPaymentId,
-      status: "confirmed",
+      status,
       address: payload.orderDraft.address,
       couponCode: payload.orderDraft.couponCode,
       discountAmount: totals.discountAmount,

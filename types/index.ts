@@ -94,6 +94,11 @@ export interface ProductVariant {
 export interface SeoMeta {
   metaTitle?: string;
   metaDescription?: string;
+  imageAlt?: string;
+  canonicalUrl?: string;
+  keywords?: string[];
+  noindex?: boolean;
+  nofollow?: boolean;
 }
 
 export interface Product {
@@ -102,17 +107,21 @@ export interface Product {
   slug: string;
   description: string;
   price: number;
+  discountPercent?: number;
   images: string[];
   category: ProductCategory;
   subcategory?: string;
   stock: number;
   sku?: string;
+  brand?: string;
+  attributes?: Record<string, string>;
   variants?: ProductVariant[];
   featured?: boolean;
   popularity?: number;
   tags?: string[];
   rating?: number;
   reviewCount?: number;
+  weightGrams?: number;
   status?: ProductStatus;
   visibility?: ProductVisibility;
   seo?: SeoMeta;
@@ -391,6 +400,300 @@ export interface FinanceExpense {
   createdAt: string;
 }
 
+export type DeliverySpeed = "standard" | "express" | "same_day";
+export type DeliveryZoneType = "local" | "regional" | "national";
+export type IntegrationProviderType = "payment" | "shipping" | "notification" | "analytics" | "other";
+export type IntegrationHealthStatus = "active" | "failed" | "disabled" | "unknown";
+
+export interface DeliveryPricingRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  speed?: DeliverySpeed;
+  minDistanceKm?: number;
+  maxDistanceKm?: number;
+  minOrderValue?: number;
+  maxOrderValue?: number;
+  minWeightKg?: number;
+  maxWeightKg?: number;
+  zoneIds?: string[];
+  flatFee: number;
+  perKmFee: number;
+}
+
+export interface FreeDeliveryRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  minOrderValue?: number;
+  productIds?: string[];
+  categoryIds?: string[];
+  firstOrderOnly?: boolean;
+  customerSegments?: CustomerSegment[];
+  startsAt?: string;
+  endsAt?: string;
+  campaignIds?: string[];
+}
+
+export interface DeliveryZone {
+  id: string;
+  name: string;
+  type: DeliveryZoneType;
+  enabled: boolean;
+  cities?: string[];
+  pincodePrefixes?: string[];
+  baseFee: number;
+  expressSurcharge: number;
+}
+
+export interface DeliveryControlConfig {
+  enabled: boolean;
+  expressEnabled: boolean;
+  sameDayEnabled: boolean;
+  maxRadiusKm: number;
+  slaStandardHours: number;
+  slaExpressHours: number;
+  blockedPincodes: string[];
+  baseFee: number;
+  expressSurcharge: number;
+  sameDaySurcharge: number;
+  pricingRules: DeliveryPricingRule[];
+  freeDeliveryRules: FreeDeliveryRule[];
+  zones: DeliveryZone[];
+}
+
+export interface PaymentMethodControl {
+  upi: boolean;
+  cards: boolean;
+  netBanking: boolean;
+  cod: boolean;
+  wallet: boolean;
+  razorpay: boolean;
+  stripe: boolean;
+  paypal: boolean;
+}
+
+export interface PaymentRuleConfig {
+  minOrderValue: number;
+  maxOrderValue: number;
+  codMaxOrderValue: number;
+  codBlockedPincodes: string[];
+  retryEnabled: boolean;
+  maxRetries: number;
+  smartFallbackEnabled: boolean;
+  autoRefundOnReturnApproval: boolean;
+  partialRefundsEnabled: boolean;
+}
+
+export interface PaymentControlConfig {
+  systemEnabled: boolean;
+  methods: PaymentMethodControl;
+  rules: PaymentRuleConfig;
+}
+
+export interface ApiIntegrationProvider {
+  id: string;
+  name: string;
+  type: IntegrationProviderType;
+  enabled: boolean;
+  mode: "test" | "live";
+  keyRef: string;
+  secretRef?: string;
+  healthStatus: IntegrationHealthStatus;
+  lastCheckedAt?: string;
+  lastError?: string;
+  endpoint?: string;
+}
+
+export interface WebhookSubscription {
+  id: string;
+  event: "payment_success" | "order_updated" | "delivery_updated";
+  url: string;
+  enabled: boolean;
+  retryFailed: boolean;
+  maxRetries: number;
+  lastStatus: "idle" | "success" | "failed";
+  lastTriggeredAt?: string;
+}
+
+export interface IntegrationControlConfig {
+  defaultMode: "test" | "live";
+  providers: ApiIntegrationProvider[];
+  webhooks: WebhookSubscription[];
+}
+
+export interface OperationsControlConfig {
+  maintenanceMode: boolean;
+  checkoutEnabled: boolean;
+  taxEnabled: boolean;
+  autoOrderConfirm: boolean;
+  autoDeliveryAssignment: boolean;
+}
+
+export interface AlertControlConfig {
+  paymentFailureRateThreshold: number;
+  deliveryDelayThreshold: number;
+  apiLatencyThresholdMs: number;
+  refundRateThreshold: number;
+}
+
+export interface PluginApp {
+  id: string;
+  name: string;
+  slug: string;
+  provider: string;
+  version: string;
+  category: "marketing" | "shipping" | "payments" | "analytics" | "operations" | "other";
+  status: "installed" | "disabled" | "uninstalled";
+  apiEndpoint?: string;
+  webhookEndpoint?: string;
+  installedAt: string;
+  updatedAt: string;
+}
+
+export interface MobileAppControl {
+  id: "default";
+  appEnabled: boolean;
+  pushNotificationsEnabled: boolean;
+  forceUpdateAndroidVersion?: string;
+  forceUpdateIosVersion?: string;
+  showWishlist: boolean;
+  showWallet: boolean;
+  showReferrals: boolean;
+  homeLayoutPreset: "classic" | "sale-first" | "minimal";
+  updatedAt: string;
+}
+
+export interface AutomationCenterRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  condition: string;
+  action: string;
+  priority: number;
+}
+
+export interface AutomationCenterConfig {
+  id: "default";
+  aiDemandForecastingEnabled: boolean;
+  aiFraudDetectionEnabled: boolean;
+  aiSmartPricingEnabled: boolean;
+  aiRecommendationsEnabled: boolean;
+  automationRules: AutomationCenterRule[];
+  sandboxMode: boolean;
+  abTestingEnabled: boolean;
+  updatedAt: string;
+}
+
+export interface CmsPageConfig {
+  id: string;
+  title: string;
+  slug: string;
+  status: "draft" | "published";
+  seo?: SeoMeta;
+  updatedAt: string;
+}
+
+export interface IntegrationLogEntry {
+  id: string;
+  provider: string;
+  type: "request" | "response" | "error";
+  status: "success" | "failed";
+  latencyMs: number;
+  message: string;
+  createdAt: string;
+}
+
+export interface WebhookLogEntry {
+  id: string;
+  event: "payment_success" | "order_updated" | "delivery_updated";
+  targetUrl: string;
+  status: "success" | "failed";
+  attempts: number;
+  responseCode?: number;
+  createdAt: string;
+}
+
+export interface BulkImportValidationError {
+  row: number;
+  field: string;
+  code: "missing" | "duplicate_sku" | "invalid_category" | "invalid_value";
+  message: string;
+}
+
+export interface MetaAdsConfig {
+  id: "default";
+  connected: boolean;
+  adAccountId?: string;
+  businessId?: string;
+  catalogId?: string;
+  pixelId?: string;
+  accessTokenRef?: string;
+  syncEnabled: boolean;
+  testMode: boolean;
+  lastSyncAt?: string;
+  updatedAt: string;
+}
+
+export interface MetaAdsCampaign {
+  id: string;
+  name: string;
+  type: "conversion" | "retargeting" | "catalog";
+  status: "draft" | "active" | "paused" | "completed";
+  productIds: string[];
+  dailyBudget: number;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  revenue: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SeoPlatformConfig {
+  id: "default";
+  sitemapEnabled: boolean;
+  robotsPolicy: "index_follow" | "index_nofollow" | "noindex_follow" | "noindex_nofollow";
+  pageSpeedMode: "balanced" | "performance" | "quality";
+  schemaProductEnabled: boolean;
+  schemaOrganizationEnabled: boolean;
+  noindexCategorySlugs: string[];
+  updatedAt: string;
+}
+
+export interface SeoTrafficInsight {
+  keyword: string;
+  clicks: number;
+  impressions: number;
+  avgPosition: number;
+  source: "google" | "bing" | "social" | "direct";
+}
+
+export interface SocialShareConfig {
+  id: "default";
+  whatsappEnabled: boolean;
+  instagramEnabled: boolean;
+  facebookEnabled: boolean;
+  twitterEnabled: boolean;
+  referralRewardsEnabled: boolean;
+  rewardPointsPerReferral: number;
+  updatedAt: string;
+}
+
+export interface SocialShareLink {
+  id: string;
+  productId?: string;
+  platform: "whatsapp" | "instagram" | "facebook" | "twitter";
+  refCode: string;
+  url: string;
+  clicks: number;
+  conversions: number;
+  revenue: number;
+  createdAt: string;
+}
+
 export interface StoreSettings {
   id: "default";
   storeName: string;
@@ -400,6 +703,11 @@ export interface StoreSettings {
   deliveryFee: number;
   currency: string;
   themeColor: string;
+  delivery: DeliveryControlConfig;
+  payments: PaymentControlConfig;
+  integrations: IntegrationControlConfig;
+  operations: OperationsControlConfig;
+  alerts: AlertControlConfig;
   updatedAt: string;
 }
 

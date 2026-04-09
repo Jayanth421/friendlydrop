@@ -1,12 +1,18 @@
 import { requireAdminPermission } from "@/lib/auth/session";
 import { getControlTowerSnapshot } from "@/lib/control-tower";
 import { getMarketingInsights, getVendors } from "@/lib/enterprise";
+import { getGrowthAnalyticsSummary } from "@/lib/firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 
 export default async function AdminAnalyticsPage() {
   await requireAdminPermission("analytics:view");
-  const [tower, marketing, vendors] = await Promise.all([getControlTowerSnapshot(), getMarketingInsights(), getVendors()]);
+  const [tower, marketing, vendors, growth] = await Promise.all([
+    getControlTowerSnapshot(),
+    getMarketingInsights(),
+    getVendors(),
+    getGrowthAnalyticsSummary(),
+  ]);
 
   const topVendor = [...vendors].sort((a, b) => (b.totalSales ?? 0) - (a.totalSales ?? 0))[0];
 
@@ -58,6 +64,19 @@ export default async function AdminAnalyticsPage() {
               {metric.provider}: {metric.successRate}% ({metric.successful}/{metric.totalAttempts})
             </p>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Growth Signals (Ads + SEO + Sharing)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p>Estimated product views: {growth.productViews}</p>
+          <p>Ad spend / revenue: {formatCurrency(growth.adSpend)} / {formatCurrency(growth.adRevenue)}</p>
+          <p>Ad ROI: {growth.adRoiPercent}%</p>
+          <p>SEO clicks: {growth.seoClicks}</p>
+          <p>Share clicks / revenue: {growth.shareClicks} / {formatCurrency(growth.shareRevenue)}</p>
         </CardContent>
       </Card>
     </div>

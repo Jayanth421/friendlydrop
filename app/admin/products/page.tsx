@@ -37,7 +37,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
 
       <QikinkImporter />
 
-      <BulkProductUploader />
+      <BulkProductUploader initialProducts={products} />
 
       <Card>
         <CardHeader><CardTitle>Catalog</CardTitle></CardHeader>

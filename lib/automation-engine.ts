@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { LOW_STOCK_THRESHOLD } from "@/lib/constants";
-import { getProductById, reserveInventoryForOrder, updateOrderShipping } from "@/lib/firebase/firestore";
+import { getProductById, getStoreSettings, reserveInventoryForOrder, updateOrderShipping } from "@/lib/firebase/firestore";
 import { publishSystemEvent } from "@/lib/system-events";
 import { AutomationRule, Order, ShippingDetails } from "@/types";
 
@@ -48,6 +48,8 @@ function buildAutoShipping(order: Order): ShippingDetails {
 }
 
 export async function runPostPaymentAutomation(order: Order, input: { provider: "razorpay" | "stripe" }) {
+  const settings = await getStoreSettings();
+
   await publishSystemEvent({
     type: "payment_succeeded",
     module: "payments",
@@ -61,6 +63,23 @@ export async function runPostPaymentAutomation(order: Order, input: { provider: 
     },
   });
 
+  const ruleIdsExecuted: string[] = [];
+
+  if (!settings.operations.autoOrderConfirm) {
+    await publishSystemEvent({
+      type: "automation_rule_executed",
+      module: "automation",
+      source: "automation:post-payment",
+      orderId: order.id,
+      userId: order.userId,
+      payload: {
+        ruleIds: [],
+        skipped: ["order_confirmation", "inventory_reservation", "delivery_assignment"],
+      },
+    });
+    return;
+  }
+
   await publishSystemEvent({
     type: "order_confirmed",
     module: "orders",
@@ -71,6 +90,7 @@ export async function runPostPaymentAutomation(order: Order, input: { provider: 
       status: order.status,
     },
   });
+  ruleIdsExecuted.push("payment-success-to-fulfillment");
 
   const reservations = await reserveInventoryForOrder(order.id, order.items);
 
@@ -94,6 +114,7 @@ export async function runPostPaymentAutomation(order: Order, input: { provider: 
       orderId: order.id,
       payload: { ...item },
     });
+    ruleIdsExecuted.push("inventory-low-stock-alert");
   }
 
   const vendorIds = new Set<string>();
@@ -117,7 +138,7 @@ export async function runPostPaymentAutomation(order: Order, input: { provider: 
     });
   }
 
-  if (!order.shipping?.trackingId) {
+  if (settings.operations.autoDeliveryAssignment && !order.shipping?.trackingId) {
     const autoShipping = buildAutoShipping(order);
     await updateOrderShipping(order.id, autoShipping);
 
@@ -142,7 +163,8 @@ export async function runPostPaymentAutomation(order: Order, input: { provider: 
     orderId: order.id,
     userId: order.userId,
     payload: {
-      ruleIds: AUTOMATION_RULES.filter((rule) => rule.enabled).map((rule) => rule.id),
+      ruleIds: ruleIdsExecuted.length ? ruleIdsExecuted : AUTOMATION_RULES.filter((rule) => rule.enabled).map((rule) => rule.id),
+      autoDeliveryAssignment: settings.operations.autoDeliveryAssignment,
     },
   });
 }
