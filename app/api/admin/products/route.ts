@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
       ...parsed,
       slug: createSlug(parsed.name),
       featured: parsed.featured ?? false,
+      recommended: parsed.recommended ?? false,
       popularity: parsed.popularity ?? 50,
       rating: 0,
       reviewCount: 0,

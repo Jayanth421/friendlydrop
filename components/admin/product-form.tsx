@@ -18,8 +18,11 @@ interface ProductFormValues {
   subcategory?: string;
   stock: number;
   sku?: string;
+  brand?: string;
+  discountPercent?: number;
   tags?: string[];
   featured?: boolean;
+  recommended?: boolean;
   popularity?: number;
   status?: "draft" | "published" | "archived";
   visibility?: "public" | "private";
@@ -43,8 +46,11 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
       subcategory: "",
       stock: 20,
       sku: "",
+      brand: "",
+      discountPercent: 0,
       tags: [],
       featured: true,
+      recommended: false,
       popularity: 80,
       status: "published",
       visibility: "public",
@@ -103,6 +109,7 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
         ...form,
         price: Number(form.price),
         stock: Number(form.stock),
+        discountPercent: Number(form.discountPercent ?? 0),
         popularity: Number(form.popularity),
         tags: (form.tags ?? []).filter(Boolean),
         seo: normalizedSeo,
@@ -129,6 +136,26 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
         <Input placeholder="SKU" value={form.sku ?? ""} onChange={(event) => setForm({ ...form, sku: event.target.value })} />
         <Input type="number" placeholder="Stock" value={form.stock} onChange={(event) => setForm({ ...form, stock: Number(event.target.value) })} />
         <Input placeholder="Subcategory" value={form.subcategory ?? ""} onChange={(event) => setForm({ ...form, subcategory: event.target.value })} />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-4">
+        <Input placeholder="Brand" value={form.brand ?? ""} onChange={(event) => setForm({ ...form, brand: event.target.value })} />
+        <Input
+          type="number"
+          min={0}
+          max={90}
+          placeholder="Discount %"
+          value={form.discountPercent ?? 0}
+          onChange={(event) => setForm({ ...form, discountPercent: Number(event.target.value) })}
+        />
+        <label className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 text-sm">
+          <input type="checkbox" checked={Boolean(form.featured)} onChange={(event) => setForm({ ...form, featured: event.target.checked })} />
+          Featured
+        </label>
+        <label className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 text-sm">
+          <input type="checkbox" checked={Boolean(form.recommended)} onChange={(event) => setForm({ ...form, recommended: event.target.checked })} />
+          Recommended
+        </label>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-3">

@@ -26,7 +26,10 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
           subcategory: editingProduct.subcategory,
           stock: editingProduct.stock,
           sku: editingProduct.sku,
+          brand: editingProduct.brand,
+          discountPercent: editingProduct.discountPercent,
           featured: editingProduct.featured,
+          recommended: editingProduct.recommended,
           popularity: editingProduct.popularity,
           tags: editingProduct.tags,
           status: editingProduct.status,
@@ -49,6 +52,7 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
                 <TableHead>SKU</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Visibility</TableHead>
+                <TableHead>Flags</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Actions</TableHead>
@@ -61,6 +65,9 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
                   <TableCell>{product.sku ?? "-"}</TableCell>
                   <TableCell>{product.status ?? "published"}</TableCell>
                   <TableCell>{product.visibility ?? "public"}</TableCell>
+                  <TableCell>
+                    {[product.featured ? "featured" : "", product.recommended ? "recommended" : ""].filter(Boolean).join(", ") || "-"}
+                  </TableCell>
                   <TableCell>{product.stock}</TableCell>
                   <TableCell>{formatCurrency(product.price)}</TableCell>
                   <TableCell>

@@ -44,8 +44,15 @@ export function ProductCard({ product }: { product: Product }) {
         </div>
 
         <div className="flex items-end justify-between">
-          <p className="text-sm font-bold text-black">{formatCurrency(product.price)}</p>
+          <div className="space-y-0.5">
+            <p className="text-sm font-bold text-black">{formatCurrency(product.price)}</p>
+            {product.discountPercent ? <p className="text-[11px] font-semibold text-emerald-600">{product.discountPercent}% OFF</p> : null}
+          </div>
           <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400">{product.category.replace("-", " ")}</p>
+        </div>
+        <div className="flex items-center justify-between text-[11px] text-slate-500">
+          <span>{typeof product.rating === "number" ? `${product.rating.toFixed(1)} star` : "No ratings yet"}</span>
+          <span>{product.stock > 0 ? "In stock" : "Out of stock"}</span>
         </div>
       </div>
     </motion.article>

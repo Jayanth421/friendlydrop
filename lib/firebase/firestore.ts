@@ -75,6 +75,10 @@ function applyProductsPostFilters(
     maxPrice?: number;
     status?: string;
     visibility?: string;
+    brands?: string[];
+    minRating?: number;
+    availability?: "in-stock" | "out-of-stock";
+    minDiscount?: number;
   },
 ) {
   let filtered = products;
@@ -110,10 +114,34 @@ function applyProductsPostFilters(
     filtered = filtered.filter((product) => product.price <= filters.maxPrice!);
   }
 
+  if (filters?.brands?.length) {
+    const normalizedBrands = new Set(filters.brands.map((brand) => brand.trim().toLowerCase()).filter(Boolean));
+    filtered = filtered.filter((product) => {
+      const brand = product.brand?.trim().toLowerCase();
+      return brand ? normalizedBrands.has(brand) : false;
+    });
+  }
+
+  if (typeof filters?.minRating === "number") {
+    filtered = filtered.filter((product) => Number(product.rating ?? 0) >= filters.minRating!);
+  }
+
+  if (filters?.availability === "in-stock") {
+    filtered = filtered.filter((product) => Number(product.stock ?? 0) > 0);
+  }
+
+  if (filters?.availability === "out-of-stock") {
+    filtered = filtered.filter((product) => Number(product.stock ?? 0) <= 0);
+  }
+
+  if (typeof filters?.minDiscount === "number") {
+    filtered = filtered.filter((product) => Number(product.discountPercent ?? 0) >= filters.minDiscount!);
+  }
+
   return filtered;
 }
 
-function sortProducts(products: Product[], sort: "popularity" | "price-asc" | "price-desc") {
+function sortProducts(products: Product[], sort: "popularity" | "price-asc" | "price-desc" | "newest") {
   const items = [...products];
 
   if (sort === "price-asc") {
@@ -122,6 +150,10 @@ function sortProducts(products: Product[], sort: "popularity" | "price-asc" | "p
 
   if (sort === "price-desc") {
     return items.sort((a, b) => b.price - a.price);
+  }
+
+  if (sort === "newest") {
+    return items.sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
   }
 
   return items.sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
@@ -593,14 +625,19 @@ export async function getFeaturedProducts(limit = 6): Promise<Product[]> {
 export async function getProducts(filters?: {
   category?: string;
   search?: string;
-  sort?: "popularity" | "price-asc" | "price-desc";
+  sort?: "popularity" | "price-asc" | "price-desc" | "newest";
   minPrice?: number;
   maxPrice?: number;
   status?: string;
   visibility?: string;
+  brands?: string[];
+  minRating?: number;
+  availability?: "in-stock" | "out-of-stock";
+  minDiscount?: number;
 }): Promise<Product[]> {
   if (!isFirestoreReady()) {
-    return FALLBACK_PRODUCTS;
+    const sort = filters?.sort ?? "popularity";
+    return sortProducts(applyProductsPostFilters(FALLBACK_PRODUCTS, filters), sort);
   }
 
   const sort = filters?.sort ?? "popularity";
@@ -623,6 +660,8 @@ export async function getProducts(filters?: {
     query = query.orderBy("price", "asc");
   } else if (sort === "price-desc") {
     query = query.orderBy("price", "desc");
+  } else if (sort === "newest") {
+    query = query.orderBy("createdAt", "desc");
   } else {
     query = query.orderBy("popularity", "desc");
   }
@@ -645,6 +684,20 @@ export async function getProducts(filters?: {
     products = sortProducts(products, sort);
     return products.slice(0, 200);
   }
+}
+
+export async function getRecommendedProducts(input: { productId?: string; category?: string; limit?: number }) {
+  const limit = Math.max(1, Math.min(input.limit ?? 6, 20));
+  const baseProducts = await getProducts({
+    category: input.category,
+    sort: "popularity",
+    availability: "in-stock",
+  });
+
+  const curated = baseProducts.filter((product) => product.id !== input.productId);
+  const recommendedFlagged = curated.filter((product) => product.recommended);
+  const fallback = curated.filter((product) => !product.recommended);
+  return [...recommendedFlagged, ...fallback].slice(0, limit);
 }
 
 export async function getProductById(productId: string): Promise<Product | null> {
@@ -1089,13 +1142,23 @@ export async function createOrder(order: Omit<Order, "id" | "createdAt" | "updat
 
   await getAdminDb().collection("orders").doc(id).set(payload);
 
+  const transactionStatus =
+    order.payment.status === "success"
+      ? "success"
+      : order.payment.status === "pending"
+        ? "initiated"
+        : "failed";
+
   await createTransaction({
     orderId: id,
     userId: order.userId,
     provider: order.payment.provider,
     providerPaymentId: order.payment.paymentId,
+    proofTransactionId: order.payment.transactionId,
+    proofImageUrl: order.payment.proofImageUrl,
+    proofStatus: order.payment.proofStatus,
     amount: order.totalAmount,
-    status: order.payment.status === "success" ? "success" : "failed",
+    status: transactionStatus,
   });
 
   await getAdminDb()
@@ -1298,6 +1361,34 @@ export async function getTransactions(): Promise<Transaction[]> {
 
   const snapshot = await getAdminDb().collection("transactions").orderBy("createdAt", "desc").limit(1000).get();
   return snapshot.docs.map((doc) => mapDoc<Transaction>(doc));
+}
+
+export async function getUserTransactions(userId: string): Promise<Transaction[]> {
+  if (!isFirestoreReady()) {
+    return FALLBACK_TRANSACTIONS.filter((transaction) => transaction.userId === userId);
+  }
+
+  try {
+    const snapshot = await getAdminDb()
+      .collection("transactions")
+      .where("userId", "==", userId)
+      .orderBy("createdAt", "desc")
+      .limit(200)
+      .get();
+    return snapshot.docs.map((doc) => mapDoc<Transaction>(doc));
+  } catch (error) {
+    if (!isMissingIndexError(error)) {
+      throw error;
+    }
+
+    console.warn("Firestore composite index missing for user transactions query. Falling back to in-memory filtering.", error);
+
+    const snapshot = await getAdminDb().collection("transactions").limit(1000).get();
+    return snapshot.docs
+      .map((doc) => mapDoc<Transaction>(doc))
+      .filter((transaction) => transaction.userId === userId)
+      .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
+  }
 }
 
 export async function updateTransaction(transactionId: string, updates: Partial<Transaction>) {

@@ -104,7 +104,8 @@ async function calculateTotal(
       categoryIds: secureItems.map((item) => item.category),
     });
 
-    const fallback = checkoutControls.payments.fallbackGateway;
+    const fallbackGateway = checkoutControls.payments.fallbackGateway;
+    const fallback = fallbackGateway === "razorpay" || fallbackGateway === "stripe" ? fallbackGateway : undefined;
     const shouldFallback =
       settings.payments.rules.smartFallbackEnabled &&
       fallback &&
@@ -159,6 +160,11 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requireApiUser(request);
     const payload = createOrderSchema.parse(await request.json());
+
+    if (payload.paymentMethod === "upi-offline") {
+      return NextResponse.json({ error: "Use /api/payments/upi for offline UPI submissions" }, { status: 400 });
+    }
+
     const totals = await calculateTotal({
       userId: user.uid,
       items: payload.items,
@@ -168,7 +174,7 @@ export async function POST(request: NextRequest) {
         postalCode: payload.address.postalCode,
         city: payload.address.city,
       },
-      paymentMethod: payload.paymentMethod,
+      paymentMethod: payload.paymentMethod as "razorpay" | "stripe",
     });
 
     await publishSystemEvent({

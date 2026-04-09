@@ -1,43 +1,97 @@
 import { Metadata } from "next";
-import { ProductGrid } from "@/components/product/product-grid";
+import { ShopBrowser } from "@/components/product/shop-browser";
 import { getProducts } from "@/lib/firebase/firestore";
-import { CATEGORIES } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Shop Products",
 };
 
-export default async function ProductsPage({
-  searchParams,
-}: {
-  searchParams: { category?: string; sort?: "popularity" | "price-asc" | "price-desc"; minPrice?: string; maxPrice?: string };
-}) {
-  const products = await getProducts({
-    category: searchParams.category,
-    sort: searchParams.sort,
-    minPrice: searchParams.minPrice ? Number(searchParams.minPrice) : undefined,
-    maxPrice: searchParams.maxPrice ? Number(searchParams.maxPrice) : undefined,
-  });
+type SearchParams = {
+  category?: string;
+  sort?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  minRating?: string;
+  availability?: string;
+  minDiscount?: string;
+  brand?: string | string[];
+};
+
+function normalizeSort(sort?: string): "popularity" | "price-asc" | "price-desc" | "newest" {
+  if (sort === "price-asc" || sort === "price-low-high") {
+    return "price-asc";
+  }
+
+  if (sort === "price-desc" || sort === "price-high-low") {
+    return "price-desc";
+  }
+
+  if (sort === "newest") {
+    return "newest";
+  }
+
+  return "popularity";
+}
+
+function normalizeBrands(brand?: string | string[]) {
+  if (!brand) {
+    return [] as string[];
+  }
+
+  const values = Array.isArray(brand) ? brand : brand.split(",");
+  return values.map((value) => value.trim()).filter(Boolean);
+}
+
+export default async function ProductsPage({ searchParams }: { searchParams: SearchParams }) {
+  const brands = normalizeBrands(searchParams.brand);
+
+  const [products, allProducts] = await Promise.all([
+    getProducts({
+      category: searchParams.category,
+      sort: normalizeSort(searchParams.sort),
+      minPrice: searchParams.minPrice ? Number(searchParams.minPrice) : undefined,
+      maxPrice: searchParams.maxPrice ? Number(searchParams.maxPrice) : undefined,
+      brands: brands.length ? brands : undefined,
+      minRating: searchParams.minRating ? Number(searchParams.minRating) : undefined,
+      availability:
+        searchParams.availability === "in-stock" || searchParams.availability === "out-of-stock"
+          ? searchParams.availability
+          : undefined,
+      minDiscount: searchParams.minDiscount ? Number(searchParams.minDiscount) : undefined,
+    }),
+    getProducts(),
+  ]);
+
+  const maxPrice = allProducts.reduce((max, product) => Math.max(max, Number(product.price ?? 0)), 0);
+  const minPriceCandidate = allProducts.reduce((min, product) => Math.min(min, Number(product.price ?? 0)), Number.MAX_SAFE_INTEGER);
+  const minPrice = minPriceCandidate === Number.MAX_SAFE_INTEGER ? 0 : minPriceCandidate;
 
   return (
     <main className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6">
-        <h1 className="font-display text-4xl font-bold text-ink">Shop Products</h1>
-        <p className="mt-2 text-slate-600">Filter by category, price, and popularity to find your perfect custom gift.</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {CATEGORIES.map((category) => (
-            <a
-              key={category.value}
-              href={`/products?category=${category.value}`}
-              className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700"
-            >
-              {category.label}
-            </a>
-          ))}
-        </div>
-      </div>
-
-      <ProductGrid products={products} />
+      <ShopBrowser
+        initialProducts={products}
+        initialFacets={{
+          categories: Array.from(new Set(allProducts.map((product) => product.category))).sort(),
+          brands: Array.from(
+            new Set(allProducts.map((product) => product.brand?.trim()).filter((brand): brand is string => Boolean(brand))),
+          ).sort((a, b) => a.localeCompare(b)),
+          minPrice,
+          maxPrice,
+        }}
+        initialFilters={{
+          category: searchParams.category ?? "",
+          sort: normalizeSort(searchParams.sort),
+          minPrice: searchParams.minPrice ? Number(searchParams.minPrice) : minPrice,
+          maxPrice: searchParams.maxPrice ? Number(searchParams.maxPrice) : maxPrice,
+          brands,
+          minRating: searchParams.minRating ? Number(searchParams.minRating) : undefined,
+          availability:
+            searchParams.availability === "in-stock" || searchParams.availability === "out-of-stock"
+              ? searchParams.availability
+              : "all",
+          minDiscount: searchParams.minDiscount ? Number(searchParams.minDiscount) : undefined,
+        }}
+      />
     </main>
   );
 }

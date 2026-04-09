@@ -25,7 +25,7 @@ export const createOrderSchema = z.object({
   items: z.array(cartItemSchema).min(1),
   address: addressSchema,
   couponCode: z.string().trim().optional(),
-  paymentMethod: z.enum(["razorpay", "stripe"]),
+  paymentMethod: z.enum(["razorpay", "stripe", "upi-offline"]),
   priority: z.enum(["express", "normal"]).optional().default("normal"),
 });
 
@@ -62,6 +62,7 @@ export const productSchema = z.object({
   variants: z.array(productVariantSchema).optional(),
   tags: z.array(z.string()).optional(),
   featured: z.boolean().optional(),
+  recommended: z.boolean().optional(),
   popularity: z.number().int().optional(),
   status: z.enum(["draft", "published", "archived"]).optional(),
   visibility: z.enum(["public", "private"]).optional(),
@@ -77,6 +78,18 @@ export const productSchema = z.object({
     })
     .optional(),
   vendorId: z.string().optional(),
+});
+
+export const upiOfflinePaymentSchema = z.object({
+  orderDraft: createOrderSchema,
+  upiVpa: z.string().trim().min(3),
+  proofImageUrl: z.string().url(),
+  transactionId: z.string().trim().min(3).max(64).optional(),
+});
+
+export const upiProofReviewSchema = z.object({
+  status: z.enum(["approved", "rejected"]),
+  note: z.string().trim().max(240).optional(),
 });
 
 export const couponValidationSchema = z.object({

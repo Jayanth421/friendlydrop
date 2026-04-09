@@ -257,7 +257,11 @@ function gatewayEnabled(settings: StoreSettings, gateway: PaymentProvider) {
     return settings.payments.methods.razorpay;
   }
 
-  return settings.payments.methods.stripe;
+  if (gateway === "stripe") {
+    return settings.payments.methods.stripe;
+  }
+
+  return settings.payments.methods.upi;
 }
 
 function getFallbackGateway(availableGateways: Record<PaymentProvider, boolean>) {
@@ -304,6 +308,7 @@ export function evaluateCheckoutControls(
   const availableGateways: Record<PaymentProvider, boolean> = {
     razorpay: paymentEnabled && gatewayEnabled(settings, "razorpay") && inOrderRange,
     stripe: paymentEnabled && gatewayEnabled(settings, "stripe") && inOrderRange,
+    upi_offline: paymentEnabled && gatewayEnabled(settings, "upi_offline") && inOrderRange,
   };
 
   let paymentMessage: string | undefined;
@@ -313,7 +318,7 @@ export function evaluateCheckoutControls(
     paymentMessage = "Payments are temporarily disabled by admin.";
   } else if (!inOrderRange) {
     paymentMessage = `Orders must be between ${settings.payments.rules.minOrderValue} and ${settings.payments.rules.maxOrderValue}.`;
-  } else if (!availableGateways.razorpay && !availableGateways.stripe) {
+  } else if (!availableGateways.razorpay && !availableGateways.stripe && !availableGateways.upi_offline) {
     paymentMessage = "No payment gateway is currently available.";
   }
 

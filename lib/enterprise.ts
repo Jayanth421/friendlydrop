@@ -180,6 +180,31 @@ export async function createBanner(input: Omit<BannerItem, "id" | "createdAt" | 
   return payload;
 }
 
+export async function updateBanner(bannerId: string, updates: Partial<BannerItem>) {
+  if (!isFirestoreReady()) {
+    return;
+  }
+
+  await getAdminDb()
+    .collection("banners")
+    .doc(bannerId)
+    .set(
+      {
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+}
+
+export async function deleteBanner(bannerId: string) {
+  if (!isFirestoreReady()) {
+    return;
+  }
+
+  await getAdminDb().collection("banners").doc(bannerId).delete();
+}
+
 export async function getCatalogCategories(): Promise<CatalogCategory[]> {
   if (!isFirestoreReady()) {
     return FALLBACK_CATEGORIES;
@@ -212,6 +237,31 @@ export async function createCatalogCategory(input: Omit<CatalogCategory, "id" | 
   };
   await getAdminDb().collection("categories").doc(id).set(payload);
   return payload;
+}
+
+export async function updateCatalogCategory(categoryId: string, updates: Partial<CatalogCategory>) {
+  if (!isFirestoreReady()) {
+    return;
+  }
+
+  await getAdminDb()
+    .collection("categories")
+    .doc(categoryId)
+    .set(
+      {
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+}
+
+export async function deleteCatalogCategory(categoryId: string) {
+  if (!isFirestoreReady()) {
+    return;
+  }
+
+  await getAdminDb().collection("categories").doc(categoryId).delete();
 }
 
 export async function getCustomerCrmSnapshot() {

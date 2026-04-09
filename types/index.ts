@@ -35,7 +35,7 @@ export type OrderStatus = "pending" | "confirmed" | "packed" | "shipped" | "deli
 
 export type DesignApprovalStatus = "pending" | "approved" | "rejected" | "flagged";
 
-export type PaymentProvider = "razorpay" | "stripe";
+export type PaymentProvider = "razorpay" | "stripe" | "upi_offline";
 
 export type PaymentStatus = "initiated" | "success" | "failed" | "refunded";
 
@@ -117,6 +117,7 @@ export interface Product {
   attributes?: Record<string, string>;
   variants?: ProductVariant[];
   featured?: boolean;
+  recommended?: boolean;
   popularity?: number;
   tags?: string[];
   rating?: number;
@@ -157,7 +158,13 @@ export interface PaymentRecord {
   orderId: string;
   transactionId?: string;
   signature?: string;
-  status: "success" | "failed";
+  status: "success" | "failed" | "pending" | "rejected";
+  proofImageUrl?: string;
+  proofStatus?: "pending" | "approved" | "rejected";
+  verifiedBy?: string;
+  verifiedAt?: string;
+  notes?: string;
+  upiVpa?: string;
 }
 
 export interface OrderTimelineEntry {
@@ -317,6 +324,12 @@ export interface Transaction {
   userId: string;
   provider: PaymentProvider;
   providerPaymentId: string;
+  proofTransactionId?: string;
+  proofImageUrl?: string;
+  proofStatus?: "pending" | "approved" | "rejected";
+  verifiedBy?: string;
+  verifiedAt?: string;
+  notes?: string;
   amount: number;
   status: PaymentStatus;
   failureReason?: string;

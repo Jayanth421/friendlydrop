@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useCartStore } from "@/store/use-cart-store";
@@ -9,6 +11,7 @@ import { calculateCheckoutSummary } from "@/lib/checkout-pricing";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { firebaseStorage } from "@/lib/firebase/client";
 
 declare global {
   interface Window {
@@ -16,11 +19,13 @@ declare global {
   }
 }
 
+type PaymentMethod = "razorpay" | "stripe" | "upi-offline";
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { items, subtotal, clearCart } = useCartStore();
-  const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "stripe">("razorpay");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("razorpay");
   const [priority, setPriority] = useState<"express" | "normal">("normal");
   const [couponCode, setCouponCode] = useState("");
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -36,11 +41,22 @@ export default function CheckoutPage() {
     },
     payments: {
       enabled: true,
+      availableMethods: {
+        upi: true,
+        cards: true,
+        netBanking: true,
+        cod: true,
+        wallet: true,
+        razorpay: true,
+        stripe: true,
+        paypal: false,
+      },
       availableGateways: {
         razorpay: true,
         stripe: true,
+        upi_offline: true,
       },
-      fallbackGateway: "razorpay" as "razorpay" | "stripe",
+      fallbackGateway: "razorpay" as "razorpay" | "stripe" | "upi_offline",
       message: "",
     },
     operations: {
@@ -49,6 +65,9 @@ export default function CheckoutPage() {
     },
   });
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [upiProofImageUrl, setUpiProofImageUrl] = useState("");
+  const [upiTransactionId, setUpiTransactionId] = useState("");
   const [address, setAddress] = useState({
     fullName: "",
     phone: "",
@@ -61,6 +80,8 @@ export default function CheckoutPage() {
   });
 
   const orderSubtotal = subtotal();
+  const upiId = process.env.NEXT_PUBLIC_UPI_ID ?? "friendlydrop@upi";
+  const upiPayeeName = process.env.NEXT_PUBLIC_UPI_PAYEE_NAME ?? "FriendlyDrop";
 
   useEffect(() => {
     const params = new URLSearchParams({
@@ -89,11 +110,22 @@ export default function CheckoutPage() {
           },
           payments: {
             enabled: Boolean(data.config.payments?.enabled ?? true),
+            availableMethods: {
+              upi: Boolean(data.config.payments?.availableMethods?.upi ?? true),
+              cards: Boolean(data.config.payments?.availableMethods?.cards ?? true),
+              netBanking: Boolean(data.config.payments?.availableMethods?.netBanking ?? true),
+              cod: Boolean(data.config.payments?.availableMethods?.cod ?? true),
+              wallet: Boolean(data.config.payments?.availableMethods?.wallet ?? true),
+              razorpay: Boolean(data.config.payments?.availableMethods?.razorpay ?? true),
+              stripe: Boolean(data.config.payments?.availableMethods?.stripe ?? true),
+              paypal: Boolean(data.config.payments?.availableMethods?.paypal ?? false),
+            },
             availableGateways: {
               razorpay: Boolean(data.config.payments?.availableGateways?.razorpay ?? true),
               stripe: Boolean(data.config.payments?.availableGateways?.stripe ?? true),
+              upi_offline: Boolean(data.config.payments?.availableGateways?.upi_offline ?? true),
             },
-            fallbackGateway: (data.config.payments?.fallbackGateway ?? "razorpay") as "razorpay" | "stripe",
+            fallbackGateway: (data.config.payments?.fallbackGateway ?? "razorpay") as "razorpay" | "stripe" | "upi_offline",
             message: data.config.payments?.message ?? "",
           },
           operations: {
@@ -105,7 +137,11 @@ export default function CheckoutPage() {
         setPricingConfig(nextConfig);
 
         setPaymentMethod((current) => {
-          if (nextConfig.payments.availableGateways[current]) {
+          if (
+            (current === "razorpay" && nextConfig.payments.availableGateways.razorpay) ||
+            (current === "stripe" && nextConfig.payments.availableGateways.stripe) ||
+            (current === "upi-offline" && nextConfig.payments.availableGateways.upi_offline)
+          ) {
             return current;
           }
 
@@ -115,6 +151,10 @@ export default function CheckoutPage() {
 
           if (nextConfig.payments.availableGateways.stripe) {
             return "stripe";
+          }
+
+          if (nextConfig.payments.availableGateways.upi_offline) {
+            return "upi-offline";
           }
 
           return current;
@@ -133,6 +173,57 @@ export default function CheckoutPage() {
       }),
     [discountAmount, orderSubtotal, pricingConfig.deliveryFee, pricingConfig.taxRate],
   );
+
+  const upiPaymentNote = useMemo(() => {
+    const firstItem = items[0]?.name?.slice(0, 25) ?? "FriendlyDrop Order";
+    return `${firstItem} (${items.length} items)`;
+  }, [items]);
+
+  const upiPaymentLink = useMemo(() => {
+    const params = new URLSearchParams({
+      pa: upiId,
+      pn: upiPayeeName,
+      am: summary.total.toFixed(2),
+      cu: "INR",
+      tn: upiPaymentNote,
+    });
+
+    return `upi://pay?${params.toString()}`;
+  }, [summary.total, upiId, upiPayeeName, upiPaymentNote]);
+
+  const upiQrUrl = useMemo(
+    () => `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(upiPaymentLink)}`,
+    [upiPaymentLink],
+  );
+
+  const uploadUpiProof = async (file: File) => {
+    if (!user) {
+      toast.error("Please sign in first");
+      return;
+    }
+
+    setUploadingProof(true);
+
+    try {
+      const storageRef = ref(firebaseStorage, `payments/upi/${user.uid}/${Date.now()}-${file.name}`);
+      await uploadBytes(storageRef, file);
+      const imageUrl = await getDownloadURL(storageRef);
+      setUpiProofImageUrl(imageUrl);
+
+      await fetch("/api/uploads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl }),
+      });
+
+      toast.success("Payment screenshot uploaded");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not upload screenshot");
+    } finally {
+      setUploadingProof(false);
+    }
+  };
 
   const applyCoupon = async () => {
     if (!couponCode) {
@@ -224,8 +315,17 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!pricingConfig.payments.availableGateways.razorpay && !pricingConfig.payments.availableGateways.stripe) {
+    if (
+      !pricingConfig.payments.availableGateways.razorpay &&
+      !pricingConfig.payments.availableGateways.stripe &&
+      !pricingConfig.payments.availableGateways.upi_offline
+    ) {
       toast.error(pricingConfig.payments.message || "No payment option is available right now.");
+      return;
+    }
+
+    if (paymentMethod === "upi-offline" && !upiProofImageUrl) {
+      toast.error("Upload payment screenshot to continue.");
       return;
     }
 
@@ -242,7 +342,7 @@ export default function CheckoutPage() {
     try {
       if (paymentMethod === "razorpay") {
         await handleRazorpay(orderDraft);
-      } else {
+      } else if (paymentMethod === "stripe") {
         const response = await fetch("/api/create-order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -256,6 +356,27 @@ export default function CheckoutPage() {
         }
 
         window.location.href = data.url;
+      } else {
+        const response = await fetch("/api/payments/upi", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderDraft,
+            upiVpa: upiId,
+            proofImageUrl: upiProofImageUrl,
+            transactionId: upiTransactionId.trim() || undefined,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.order?.id) {
+          throw new Error(data.error ?? "Unable to submit UPI payment proof");
+        }
+
+        clearCart();
+        toast.success("UPI proof submitted. Order pending verification.");
+        router.push(`/orders/${data.order.id}`);
       }
     } catch (error) {
       console.error(error);
@@ -270,7 +391,7 @@ export default function CheckoutPage() {
       <form className="space-y-4" onSubmit={onSubmit}>
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <h1 className="font-display text-3xl font-bold text-ink">Checkout</h1>
-          <p className="mt-2 text-sm text-slate-600">Secure payments via Razorpay and Stripe.</p>
+          <p className="mt-2 text-sm text-slate-600">Secure payments via Razorpay, Stripe, or offline UPI verification.</p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Input required placeholder="Full Name" value={address.fullName} onChange={(event) => setAddress({ ...address, fullName: event.target.value })} />
@@ -287,7 +408,7 @@ export default function CheckoutPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="text-lg font-semibold text-ink">Payment Method</h2>
           {pricingConfig.payments.message ? <p className="mt-2 text-xs text-amber-600">{pricingConfig.payments.message}</p> : null}
-          <div className="mt-3 flex gap-3">
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <label className="inline-flex items-center gap-2 text-sm">
               <input
                 type="radio"
@@ -296,7 +417,7 @@ export default function CheckoutPage() {
                 onChange={() => setPaymentMethod("razorpay")}
                 disabled={!pricingConfig.payments.availableGateways.razorpay}
               />
-              Razorpay (India)
+              Razorpay
             </label>
             <label className="inline-flex items-center gap-2 text-sm">
               <input
@@ -308,8 +429,66 @@ export default function CheckoutPage() {
               />
               Stripe
             </label>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="paymentMethod"
+                checked={paymentMethod === "upi-offline"}
+                onChange={() => setPaymentMethod("upi-offline")}
+                disabled={!pricingConfig.payments.availableGateways.upi_offline || !pricingConfig.payments.availableMethods.upi}
+              />
+              UPI Offline
+            </label>
           </div>
-          <p className="mt-2 text-xs text-slate-500">UPI, cards, and net banking are controlled in Admin Payment Settings.</p>
+
+          {paymentMethod === "upi-offline" ? (
+            <div className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Image
+                  src={upiQrUrl}
+                  alt="UPI QR code"
+                  width={160}
+                  height={160}
+                  className="h-40 w-40 rounded-lg border border-slate-200 bg-white object-contain p-2"
+                />
+                <div className="space-y-2 text-sm text-slate-700">
+                  <p className="font-semibold">Scan & pay using any UPI app</p>
+                  <p>UPI ID: {upiId}</p>
+                  <p>Amount: {formatCurrency(summary.total)}</p>
+                  <p>Note: {upiPaymentNote}</p>
+                  <a href={upiPaymentLink} className="inline-block rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-white">
+                    Open UPI App Link
+                  </a>
+                </div>
+              </div>
+
+              <label className="block text-sm font-medium text-slate-700">
+                Upload Payment Screenshot (Required)
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      uploadUpiProof(file);
+                    }
+                  }}
+                  className="mt-2 block w-full text-sm"
+                />
+                {uploadingProof ? <p className="mt-1 text-xs text-slate-500">Uploading screenshot...</p> : null}
+                {upiProofImageUrl ? <p className="mt-1 text-xs text-emerald-600">Screenshot uploaded successfully.</p> : null}
+              </label>
+
+              <Input
+                placeholder="Transaction ID (Optional)"
+                value={upiTransactionId}
+                onChange={(event) => setUpiTransactionId(event.target.value)}
+              />
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">UPI, cards, and net banking are controlled in Admin Payment Settings.</p>
+          )}
+
           <h3 className="mt-5 text-sm font-semibold text-ink">Delivery Priority</h3>
           <div className="mt-2 flex gap-3">
             <label className="inline-flex items-center gap-2 text-sm">
@@ -337,17 +516,22 @@ export default function CheckoutPage() {
             submitting ||
             !items.length ||
             !user ||
+            (paymentMethod === "upi-offline" && !upiProofImageUrl) ||
             pricingConfig.operations.maintenanceMode ||
             !pricingConfig.operations.checkoutEnabled ||
             !pricingConfig.delivery.allowed ||
-            (!pricingConfig.payments.availableGateways.razorpay && !pricingConfig.payments.availableGateways.stripe)
+            (!pricingConfig.payments.availableGateways.razorpay &&
+              !pricingConfig.payments.availableGateways.stripe &&
+              !pricingConfig.payments.availableGateways.upi_offline)
           }
         >
           {pricingConfig.operations.maintenanceMode || !pricingConfig.operations.checkoutEnabled
             ? "Checkout Disabled"
             : submitting
               ? "Processing..."
-              : `Pay ${formatCurrency(summary.total)}`}
+              : paymentMethod === "upi-offline"
+                ? "Submit UPI Proof"
+                : `Pay ${formatCurrency(summary.total)}`}
         </Button>
       </form>
 
@@ -355,7 +539,7 @@ export default function CheckoutPage() {
         <h2 className="text-lg font-semibold text-ink">Order Summary</h2>
         <div className="mt-3 space-y-2">
           {items.map((item) => (
-            <div key={item.productId} className="flex items-center justify-between text-sm">
+            <div key={`${item.productId}-${item.variantId ?? "default"}`} className="flex items-center justify-between text-sm">
               <span>{item.name} x {item.quantity}</span>
               <span>{formatCurrency(item.price * item.quantity)}</span>
             </div>

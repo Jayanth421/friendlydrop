@@ -15,6 +15,9 @@ const statusMap: Record<string, "default" | "secondary" | "destructive" | "outli
   open: "secondary",
   in_progress: "outline",
   resolved: "default",
+  initiated: "secondary",
+  success: "default",
+  failed: "destructive",
 };
 
 export function StatusPill({ status }: { status: string }) {

@@ -3,6 +3,7 @@ import { getBanners, getMarketingInsights } from "@/lib/enterprise";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BannerForm } from "@/components/admin/banner-form";
+import { BannerRowActions } from "@/components/admin/banner-row-actions";
 
 export default async function AdminBannersPage() {
   await requireAdminPermission("banners:manage");
@@ -26,6 +27,7 @@ export default async function AdminBannersPage() {
                 <TableHead>Position</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Campaign</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -37,6 +39,7 @@ export default async function AdminBannersPage() {
                   <TableCell>{banner.position}</TableCell>
                   <TableCell>{banner.active ? "active" : "inactive"}</TableCell>
                   <TableCell>{banner.linkedCampaignId ?? "-"}</TableCell>
+                  <TableCell><BannerRowActions bannerId={banner.id} active={banner.active} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>

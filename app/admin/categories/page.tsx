@@ -3,6 +3,7 @@ import { getCatalogCategories } from "@/lib/enterprise";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CategoryForm } from "@/components/admin/category-form";
+import { CategoryRowActions } from "@/components/admin/category-row-actions";
 
 export default async function AdminCategoriesPage() {
   await requireAdminPermission("catalog:manage");
@@ -25,6 +26,7 @@ export default async function AdminCategoriesPage() {
                 <TableHead>Level</TableHead>
                 <TableHead>Parent</TableHead>
                 <TableHead>Tags</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -35,6 +37,7 @@ export default async function AdminCategoriesPage() {
                   <TableCell>{category.level}</TableCell>
                   <TableCell>{category.parentId ?? "-"}</TableCell>
                   <TableCell>{category.tags?.join(", ") ?? "-"}</TableCell>
+                  <TableCell><CategoryRowActions categoryId={category.id} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>

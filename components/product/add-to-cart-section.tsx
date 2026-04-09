@@ -16,6 +16,20 @@ export function AddToCartSection({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(1);
   const [uploading, setUploading] = useState(false);
   const [customImageUrl, setCustomImageUrl] = useState<string | undefined>();
+  const [selectedVariantId, setSelectedVariantId] = useState<string | undefined>(product.variants?.[0]?.id);
+  const [selectedSize, setSelectedSize] = useState<string>("");
+  const [selectedColor, setSelectedColor] = useState<string>("");
+
+  const selectedVariant = selectedVariantId ? product.variants?.find((variant) => variant.id === selectedVariantId) : undefined;
+  const colorOptions = (product.attributes?.color ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const sizeOptions = Array.from(new Set((product.variants ?? []).map((variant) => variant.size).filter(Boolean))) as string[];
+
+  const unitPrice = selectedVariant?.price ?? product.price;
+  const stock = selectedVariant?.stock ?? product.stock;
+  const isOutOfStock = stock <= 0;
 
   const handleUpload = async (file: File) => {
     if (!user) {
@@ -54,12 +68,68 @@ export function AddToCartSection({ product }: { product: Product }) {
         <input
           type="number"
           min={1}
-          max={10}
+          max={Math.max(1, Math.min(10, stock))}
           value={quantity}
-          onChange={(event) => setQuantity(Number(event.target.value))}
+          onChange={(event) => setQuantity(Math.max(1, Number(event.target.value)))}
           className="mt-1 w-24 rounded-lg border border-slate-200 px-3 py-2"
         />
       </div>
+
+      {product.variants?.length ? (
+        <label className="block text-sm font-medium text-slate-600">
+          Variant
+          <select
+            className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+            value={selectedVariantId}
+            onChange={(event) => setSelectedVariantId(event.target.value)}
+          >
+            {product.variants.map((variant) => (
+              <option key={variant.id} value={variant.id}>
+                {(variant.size || variant.type || variant.material || variant.sku) ?? variant.id} - Rs. {variant.price}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {sizeOptions.length ? (
+        <label className="block text-sm font-medium text-slate-600">
+          Size
+          <select
+            className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+            value={selectedSize}
+            onChange={(event) => setSelectedSize(event.target.value)}
+          >
+            <option value="">Select size</option>
+            {sizeOptions.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {colorOptions.length ? (
+        <label className="block text-sm font-medium text-slate-600">
+          Color
+          <select
+            className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+            value={selectedColor}
+            onChange={(event) => setSelectedColor(event.target.value)}
+          >
+            <option value="">Select color</option>
+            {colorOptions.map((color) => (
+              <option key={color} value={color}>
+                {color}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      <p className="text-sm text-slate-600">Unit Price: Rs. {unitPrice}</p>
+      <p className={`text-xs ${isOutOfStock ? "text-red-600" : "text-emerald-600"}`}>{isOutOfStock ? "Out of stock" : `${stock} available`}</p>
 
       <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50">
         <Upload className="h-4 w-4" />
@@ -68,20 +138,24 @@ export function AddToCartSection({ product }: { product: Product }) {
       </label>
 
       <Button
+        disabled={isOutOfStock}
         className="w-full"
         onClick={() => {
+          const quantityToAdd = Math.max(1, Math.min(quantity, stock));
+          const optionSuffix = [selectedSize, selectedColor].filter(Boolean).join(" / ");
           addItem({
             productId: product.id,
-            name: product.name,
+            name: optionSuffix ? `${product.name} (${optionSuffix})` : product.name,
             image: product.images[0],
-            price: product.price,
-            quantity,
+            price: unitPrice,
+            quantity: quantityToAdd,
+            variantId: selectedVariant?.id,
             customImageUrl,
           });
           toast.success("Added to cart");
         }}
       >
-        Add To Cart
+        {isOutOfStock ? "Out Of Stock" : "Add To Cart"}
       </Button>
     </div>
   );
