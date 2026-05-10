@@ -17,10 +17,13 @@ const config: Config = {
         accent: "#ff6f3d",
         sage: "#87b39a",
         mist: "#ecf4f8",
+        gold: "#b9914f",
+        midnight: "#0d1015",
       },
       fontFamily: {
         sans: ["var(--font-manrope)", "system-ui", "sans-serif"],
-        display: ["var(--font-space-grotesk)", "system-ui", "sans-serif"],
+        display: ["var(--font-cormorant)", "serif"],
+        grotesk: ["var(--font-space-grotesk)", "system-ui", "sans-serif"],
       },
       boxShadow: {
         soft: "0 20px 80px -40px rgba(18,25,34,0.35)",

@@ -2,6 +2,7 @@ import { HeroSection } from "@/components/home/hero-section";
 import { CategoryStrip } from "@/components/home/category-strip";
 import { ProductGrid } from "@/components/product/product-grid";
 import { RecentlyViewed } from "@/components/home/recently-viewed";
+import { LuxuryExperience } from "@/components/home/luxury-experience";
 import { getFeaturedProducts, getProducts } from "@/lib/firebase/firestore";
 import { getBanners, getCatalogCategories } from "@/lib/enterprise";
 
@@ -38,11 +39,13 @@ export default async function HomePage() {
       <HeroSection banner={activeBanner} />
       <CategoryStrip categories={categories} />
 
+      <LuxuryExperience />
+
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-2xl font-semibold text-black">Featured Products</h2>
-          <a href="/products" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-            See all
+          <h2 className="luxury-heading text-3xl font-semibold">Featured Collections</h2>
+          <a href="/products" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">
+            View all
           </a>
         </div>
         <ProductGrid products={featuredProducts} />
@@ -50,9 +53,9 @@ export default async function HomePage() {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-2xl font-semibold text-black">Latest Products</h2>
-          <a href="/products?sort=newest" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-            New arrivals
+          <h2 className="luxury-heading text-3xl font-semibold">New Arrivals</h2>
+          <a href="/products?sort=newest" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">
+            Shop latest
           </a>
         </div>
         <ProductGrid products={latestProducts.slice(0, 8)} />

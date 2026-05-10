@@ -24,14 +24,14 @@ export function CategoryStrip({ categories }: { categories?: CatalogCategory[] }
         <Link
           key={category.key}
           href={`/products?category=${category.value}`}
-          className="group rounded-2xl border border-slate-200 bg-white p-4 transition hover:-translate-y-0.5 hover:border-black"
+          className="glass-panel group rounded-2xl p-4 transition hover:-translate-y-0.5 hover:border-black/60 dark:hover:border-white/60"
         >
           <div className="flex items-center gap-2">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
-            <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Category</p>
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-gold" />
+            <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500 dark:text-slate-300">Category</p>
           </div>
-          <h3 className="mt-2 font-display text-2xl font-semibold text-black">{category.label}</h3>
-          <p className="mt-1 text-sm text-slate-600">{category.description}</p>
+          <h3 className="mt-2 font-display text-2xl font-semibold">{category.label}</h3>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{category.description}</p>
         </Link>
       ))}
     </section>

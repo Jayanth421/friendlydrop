@@ -32,6 +32,7 @@ import {
   Bot,
   FileText,
   Share2,
+  PenTool,
 } from "lucide-react";
 import { hasPermission } from "@/lib/rbac";
 import { UserRole } from "@/types";
@@ -56,6 +57,7 @@ const items = [
   { href: "/admin/integrations", label: "Integrations", icon: PlugZap, permission: "settings:manage" as const },
   { href: "/admin/plugins", label: "Plugins", icon: PlugZap, permission: "settings:manage" as const },
   { href: "/admin/automation", label: "AI Automation", icon: Bot, permission: "settings:manage" as const },
+  { href: "/admin/builder", label: "Visual Builder", icon: PenTool, permission: "settings:manage" as const },
   { href: "/admin/mobile", label: "Mobile Control", icon: Smartphone, permission: "settings:manage" as const },
   { href: "/admin/cms", label: "CMS Pages", icon: FileText, permission: "settings:manage" as const },
   { href: "/admin/settings", label: "Settings", icon: Settings, permission: "settings:manage" as const },

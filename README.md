@@ -14,6 +14,17 @@ Enterprise-grade full-stack eCommerce platform for custom photo prints, stickers
 
 ## Core Features
 
+### New: Luxury Fashion Experience + Visual Builder (May 2026)
+- Premium luxury storefront refresh with glassmorphism surfaces, animated hero, and dark/light mode toggle.
+- AI Recommendation experience page (`/ai-recommendation`) with curated dynamic product suggestions.
+- New admin Visual Builder (`/admin/builder`) with:
+  - live preview (`desktop` / `tablet` / `mobile`)
+  - drag-and-drop widget insertion
+  - template presets, AI-assisted section generation
+  - undo/redo history
+  - autosave + exportable JSON page state
+  - editable block properties and custom code block placeholders
+
 ### Storefront
 - Email/password + Google auth
 - Product catalog, search, filters, reviews, wishlist, cart

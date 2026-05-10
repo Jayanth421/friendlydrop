@@ -15,7 +15,7 @@ export function RecentlyViewed({ products }: { products: Product[] }) {
 
   return (
     <section className="space-y-3">
-      <h2 className="font-display text-2xl font-semibold text-black">Recently Viewed</h2>
+      <h2 className="luxury-heading text-3xl font-semibold">Recently Viewed</h2>
       <ProductGrid products={result} />
     </section>
   );

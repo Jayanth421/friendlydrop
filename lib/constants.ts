@@ -12,6 +12,7 @@ export const ORDER_STATUSES: OrderStatus[] = ["pending", "confirmed", "packed", 
 
 export const NAV_LINKS = [
   { href: "/products", label: "Shop" },
+  { href: "/ai-recommendation", label: "AI Stylist" },
   { href: "/search", label: "Search" },
   { href: "/wishlist", label: "Wishlist" },
   { href: "/orders", label: "Orders" },
@@ -36,6 +37,7 @@ export const ADMIN_NAV_LINKS = [
   { href: "/admin/integrations", label: "Integrations" },
   { href: "/admin/plugins", label: "Plugins" },
   { href: "/admin/automation", label: "AI Automation" },
+  { href: "/admin/builder", label: "Visual Builder" },
   { href: "/admin/mobile", label: "Mobile Control" },
   { href: "/admin/cms", label: "CMS Pages" },
   { href: "/admin/settings", label: "Settings" },
