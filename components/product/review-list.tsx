@@ -2,19 +2,21 @@ import { Review } from "@/types";
 
 export function ReviewList({ reviews }: { reviews: Review[] }) {
   if (!reviews.length) {
-    return <p className="text-sm text-slate-500">No reviews yet. Be the first one.</p>;
+    return <p className="border border-[#dddbdc] bg-white p-4 text-sm text-[#737373]">No reviews yet. Be the first one.</p>;
   }
 
   return (
     <div className="space-y-4">
       {reviews.map((review) => (
-        <article key={review.id} className="rounded-xl border border-slate-200 bg-white p-4">
+        <article key={review.id} className="border border-[#dddbdc] bg-white p-4 md:p-5">
           <div className="flex items-center justify-between">
-            <p className="font-semibold text-ink">{review.userName}</p>
-            <p className="text-sm text-slate-500">{new Date(review.createdAt).toLocaleDateString("en-IN")}</p>
+            <p className="text-sm uppercase tracking-[0.08em] text-[#262626]">{review.userName}</p>
+            <p className="text-xs uppercase tracking-[0.08em] text-[#737373]">{new Date(review.createdAt).toLocaleDateString("en-IN")}</p>
           </div>
-          <p className="mt-1 text-amber-500">{"?".repeat(review.rating)}{"?".repeat(5 - review.rating)}</p>
-          <p className="mt-2 text-sm text-slate-700">{review.comment}</p>
+          <div className="mt-2 inline-flex border border-[#dddbdc] px-2 py-1 text-xs uppercase tracking-[0.08em] text-[#262626]">
+            Rating: {review.rating}/5
+          </div>
+          <p className="mt-3 text-sm leading-6 text-[#555]">{review.comment}</p>
         </article>
       ))}
     </div>

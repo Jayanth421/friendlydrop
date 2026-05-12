@@ -479,8 +479,11 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
             <CardHeader><CardTitle>Store Defaults & Alerts</CardTitle></CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-3">
               <input value={form.storeName} onChange={(event) => setForm({ ...form, storeName: event.target.value })} placeholder="Store name" className="h-9 rounded border border-slate-200 px-2 text-sm" />
+              <input value={form.brandPrefix ?? ""} onChange={(event) => setForm({ ...form, brandPrefix: event.target.value || undefined })} placeholder="Brand prefix (e.g. Maison)" className="h-9 rounded border border-slate-200 px-2 text-sm" />
+              <input value={form.logoUrl ?? ""} onChange={(event) => setForm({ ...form, logoUrl: event.target.value || undefined })} placeholder="Logo URL (https://...)" className="h-9 rounded border border-slate-200 px-2 text-sm" />
               <input value={form.supportEmail} onChange={(event) => setForm({ ...form, supportEmail: event.target.value })} placeholder="Support email" className="h-9 rounded border border-slate-200 px-2 text-sm" />
               <input value={form.supportPhone} onChange={(event) => setForm({ ...form, supportPhone: event.target.value })} placeholder="Support phone" className="h-9 rounded border border-slate-200 px-2 text-sm" />
+              <input value={form.brandTagline ?? ""} onChange={(event) => setForm({ ...form, brandTagline: event.target.value || undefined })} placeholder="Brand tagline" className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" />
               <input value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value.toUpperCase() })} placeholder="Currency" className="h-9 rounded border border-slate-200 px-2 text-sm" />
               <input value={form.themeColor} onChange={(event) => setForm({ ...form, themeColor: event.target.value })} placeholder="Theme color" className="h-9 rounded border border-slate-200 px-2 text-sm" />
               <div><p className="mb-1 text-xs text-slate-500">GST rate %</p><NumberInput value={form.taxRate} min={0} max={100} onChange={(value) => setForm({ ...form, taxRate: value })} /></div>

@@ -7,6 +7,7 @@ export const metadata: Metadata = {
 };
 
 type SearchParams = {
+  search?: string;
   category?: string;
   sort?: string;
   minPrice?: string;
@@ -47,6 +48,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
 
   const [products, allProducts] = await Promise.all([
     getProducts({
+      search: searchParams.search,
       category: searchParams.category,
       sort: normalizeSort(searchParams.sort),
       minPrice: searchParams.minPrice ? Number(searchParams.minPrice) : undefined,
@@ -79,6 +81,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
           maxPrice,
         }}
         initialFilters={{
+          search: searchParams.search ?? "",
           category: searchParams.category ?? "",
           sort: normalizeSort(searchParams.sort),
           minPrice: searchParams.minPrice ? Number(searchParams.minPrice) : minPrice,

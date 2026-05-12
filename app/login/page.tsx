@@ -88,22 +88,54 @@ export default function LoginPage() {
 
   return (
     <main className="max-w-none py-8 md:py-14">
-      <div className="mx-auto w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.06)] md:p-10">
-        <div className="text-center">
-          <Link href="/" className="inline-flex items-center font-display text-4xl font-bold tracking-tight text-ink md:text-5xl">
-            FriendlyDrop
-            <span className="ml-1 text-blue-500">.</span>
-          </Link>
-          <p className="mt-4 text-lg text-slate-600">Sign in to your account</p>
-        </div>
+      <div className="mx-auto w-[full] max-w-2xl rounded-[8px] border border-[#cdced3] bg-[#f7f7f8] p-5 md:p-10">
+        <h1 className="text-4xl text-[#0f1b2d] md:text-4xl">Sign in</h1>
+
+        <form className="mt-8 space-y-4" onSubmit={onSubmit}>
+          <Input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="h-14 rounded-xl border-[#ccd2dc] bg-white px-4 text-xl text-[#0f1b2d] placeholder:text-[#7083a2]"
+            required
+          />
+          <div className="relative">
+            <Input
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••••••"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="h-14 rounded-xl border-[#ccd2dc] bg-white px-4 pr-12 text-xl text-[#0f1b2d] placeholder:text-[#7083a2]"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7083a2] transition hover:text-[#2a3850]"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
+
+          <Button
+            disabled={submitting || loading}
+            className="h-14 w-full rounded-xl bg-black text-[20px] font-medium text-white hover:bg-black/90"
+            type="submit"
+          >
+            {submitting ? "Signing in..." : "Sign In"}
+          </Button>
+        </form>
 
         <Button
+          type="button"
           variant="outline"
-          className="mt-8 h-14 w-full rounded-2xl border-slate-200 bg-slate-50 text-base font-semibold text-slate-800 hover:bg-slate-100"
+          className="mt-3 h-12 w-full rounded-xl border-[#ccd2dc] bg-white text-[20px] text-[#1f2937] hover:bg-[#f8fafc]"
           disabled={submitting || loading}
           onClick={onGoogleSignIn}
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="23" height="23" aria-hidden="true">
             <path
               fill="#EA4335"
               d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.8-5.5 3.8-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.9 3.3 14.7 2.4 12 2.4A9.6 9.6 0 0 0 2.4 12c0 5.3 4.3 9.6 9.6 9.6 5.5 0 9.1-3.9 9.1-9.3 0-.6-.1-1.1-.2-1.5z"
@@ -115,62 +147,14 @@ export default function LoginPage() {
           Continue with Google
         </Button>
 
-        <div className="mt-8 flex items-center gap-4 text-sm text-slate-400">
-          <span className="h-px flex-1 bg-slate-200" />
-          <span>or sign in with email</span>
-          <span className="h-px flex-1 bg-slate-200" />
-        </div>
-
-        <form className="mt-8 space-y-5" onSubmit={onSubmit}>
-          <label className="block text-sm font-semibold text-slate-700">
-            Email
-            <Input
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="mt-2 h-14 rounded-2xl border-slate-200 bg-slate-50 px-4 text-base"
-              required
-            />
-          </label>
-
-          <label className="block text-sm font-semibold text-slate-700">
-            Password
-            <div className="relative mt-2">
-              <Input
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="h-14 rounded-2xl border-slate-200 bg-slate-50 px-4 pr-12 text-base"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((value) => !value)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            </div>
-          </label>
-
-          <Button
-            disabled={submitting || loading}
-            className="h-14 w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-lg font-semibold text-white shadow-[0_10px_20px_rgba(79,70,229,0.25)] hover:from-indigo-500 hover:to-indigo-500"
-            type="submit"
-          >
-            {submitting ? "Signing in..." : "Sign In"}
-          </Button>
-        </form>
-
-        <div className="mt-7 flex items-center justify-between text-sm text-slate-600">
-          <Link href="/forgot-password" className="hover:text-indigo-600">Forgot password?</Link>
+        <div className="mt-5 flex items-center justify-between text-[15px] text-[#2d3f5c] md:text-[20px]">
+          <Link href="/forgot-password" className="hover:text-[#2525525]">
+            Forgot password?
+          </Link>
           <p>
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="font-semibold text-indigo-600 hover:text-indigo-500">
-              Sign up
+            New here?{" "}
+            <Link href="/signup" className="text-[#71f465] hover:text-[#757575]">
+              Create account
             </Link>
           </p>
         </div>

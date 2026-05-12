@@ -967,6 +967,7 @@ export async function upsertUserProfile(profile: Omit<UserProfile, "createdAt"> 
   ensureFirestoreReady();
   const ref = getAdminDb().collection("users").doc(profile.id);
   const snapshot = await ref.get();
+  const existing = snapshot.data() ?? {};
 
   const payload: UserProfile = {
     id: profile.id,
@@ -983,6 +984,11 @@ export async function upsertUserProfile(profile: Omit<UserProfile, "createdAt"> 
     createdAt: snapshot.data()?.createdAt ?? profile.createdAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+
+  const nextPhone = profile.phone ?? existing.phone;
+  if (typeof nextPhone === "string" && nextPhone.trim()) {
+    payload.phone = nextPhone;
+  }
 
   await ref.set(payload, { merge: true });
 

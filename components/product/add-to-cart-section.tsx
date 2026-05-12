@@ -62,24 +62,12 @@ export function AddToCartSection({ product }: { product: Product }) {
   };
 
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
-      <div>
-        <p className="text-sm font-medium text-slate-600">Quantity</p>
-        <input
-          type="number"
-          min={1}
-          max={Math.max(1, Math.min(10, stock))}
-          value={quantity}
-          onChange={(event) => setQuantity(Math.max(1, Number(event.target.value)))}
-          className="mt-1 w-24 rounded-lg border border-slate-200 px-3 py-2"
-        />
-      </div>
-
+    <div className="space-y-6 border border-[#dddbdc] bg-white p-5 md:p-6">
       {product.variants?.length ? (
-        <label className="block text-sm font-medium text-slate-600">
+        <label className="block text-[12px] uppercase tracking-[0.08em] text-[#737373]">
           Variant
           <select
-            className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+            className="mt-2 h-11 w-full border border-[#dddbdc] px-3 text-sm text-[#262626] outline-none focus:border-[#262626]"
             value={selectedVariantId}
             onChange={(event) => setSelectedVariantId(event.target.value)}
           >
@@ -92,46 +80,94 @@ export function AddToCartSection({ product }: { product: Product }) {
         </label>
       ) : null}
 
-      {sizeOptions.length ? (
-        <label className="block text-sm font-medium text-slate-600">
-          Size
-          <select
-            className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-            value={selectedSize}
-            onChange={(event) => setSelectedSize(event.target.value)}
-          >
-            <option value="">Select size</option>
-            {sizeOptions.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-
       {colorOptions.length ? (
-        <label className="block text-sm font-medium text-slate-600">
-          Color
-          <select
-            className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-            value={selectedColor}
-            onChange={(event) => setSelectedColor(event.target.value)}
-          >
-            <option value="">Select color</option>
+        <div>
+          <p className="text-[12px] uppercase tracking-[0.08em] text-[#737373]">
+            Color <span className="ml-2 text-[#262626]">{selectedColor || colorOptions[0]}</span>
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
             {colorOptions.map((color) => (
-              <option key={color} value={color}>
+              <button
+                key={color}
+                type="button"
+                className={`rounded-full border px-3 py-2 text-[11px] uppercase tracking-[0.08em] ${
+                  selectedColor === color
+                    ? "border-[#262626] bg-[#262626] text-white"
+                    : "border-[#dddbdc] text-[#737373] hover:border-[#a7a7a7]"
+                }`}
+                onClick={() => setSelectedColor(color)}
+              >
                 {color}
-              </option>
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
       ) : null}
 
-      <p className="text-sm text-slate-600">Unit Price: Rs. {unitPrice}</p>
-      <p className={`text-xs ${isOutOfStock ? "text-red-600" : "text-emerald-600"}`}>{isOutOfStock ? "Out of stock" : `${stock} available`}</p>
+      {sizeOptions.length ? (
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] uppercase tracking-[0.08em] text-[#737373]">
+              Size <span className="ml-2 text-[#262626]">{selectedSize || "Select"}</span>
+            </p>
+          </div>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {sizeOptions.map((size) => (
+              <button
+                key={size}
+                type="button"
+                className={`h-11 border text-sm ${
+                  selectedSize === size
+                    ? "border-[#262626] bg-[#262626] text-white"
+                    : "border-[#dddbdc] text-[#262626] hover:border-[#a7a7a7]"
+                }`}
+                onClick={() => setSelectedSize(size)}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
-      <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50">
+      <div>
+        <p className="text-[12px] uppercase tracking-[0.08em] text-[#737373]">Quantity</p>
+        <div className="mt-2 inline-flex items-center border border-[#dddbdc]">
+          <button
+            type="button"
+            className="h-11 w-11 text-xl text-[#262626]"
+            onClick={() => setQuantity((value) => Math.max(1, value - 1))}
+            aria-label="Decrease quantity"
+          >
+            -
+          </button>
+          <input
+            type="number"
+            min={1}
+            max={Math.max(1, Math.min(10, stock))}
+            value={quantity}
+            onChange={(event) => setQuantity(Math.max(1, Number(event.target.value)))}
+            className="h-11 w-14 border-x border-[#dddbdc] text-center text-sm outline-none"
+          />
+          <button
+            type="button"
+            className="h-11 w-11 text-xl text-[#262626]"
+            onClick={() => setQuantity((value) => Math.min(Math.max(1, Math.min(10, stock)), value + 1))}
+            aria-label="Increase quantity"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-1 border-y border-[#ecebeb] py-4 text-sm">
+        <p className="text-[#262626]">Unit Price: Rs. {unitPrice}</p>
+        <p className={isOutOfStock ? "text-red-600" : "text-[#737373]"}>
+          {isOutOfStock ? "Out of stock" : `${stock} available`}
+        </p>
+      </div>
+
+      <label className="flex cursor-pointer items-center gap-2 border border-dashed border-[#c8c8c8] px-4 py-3 text-sm text-[#737373] transition hover:bg-[#fafafa]">
         <Upload className="h-4 w-4" />
         {uploading ? "Uploading..." : customImageUrl ? "Custom image uploaded" : "Upload your custom image"}
         <input type="file" accept="image/*" className="hidden" onChange={(event) => event.target.files?.[0] && handleUpload(event.target.files[0])} />
@@ -139,7 +175,7 @@ export function AddToCartSection({ product }: { product: Product }) {
 
       <Button
         disabled={isOutOfStock}
-        className="w-full"
+        className="h-12 w-full rounded-none bg-[#262626] text-sm font-medium uppercase tracking-[0.12em] text-white hover:bg-black"
         onClick={() => {
           const quantityToAdd = Math.max(1, Math.min(quantity, stock));
           const optionSuffix = [selectedSize, selectedColor].filter(Boolean).join(" / ");

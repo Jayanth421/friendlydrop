@@ -20,7 +20,7 @@ type AuthContextValue = {
   role: UserRole;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
@@ -67,14 +67,19 @@ async function readErrorMessage(response: Response) {
   return [message ?? fallback, hint].filter(Boolean).join(" ");
 }
 
-async function syncSession(user: User | null) {
+async function syncSession(user: User | null, options?: { phone?: string }) {
   if (user) {
     const idToken = await user.getIdToken(true);
+
+    const body: { idToken: string; phone?: string } = { idToken };
+    if (options?.phone) {
+      body.phone = options.phone;
+    }
 
     const response = await fetch("/api/auth/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -148,11 +153,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw error;
         }
       },
-      signup: async (name, email, password) => {
+      signup: async (name, email, password, phone) => {
         try {
           const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
           await updateProfile(cred.user, { displayName: name });
-          await syncSession(cred.user);
+          await syncSession(cred.user, { phone });
         } catch (error) {
           await signOut(firebaseAuth).catch(() => undefined);
           throw error;

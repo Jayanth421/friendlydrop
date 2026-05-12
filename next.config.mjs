@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ["images.unsplash.com", "firebasestorage.googleapis.com", "m.media-amazon.com", "api.qrserver.com"],
+    domains: ["images.unsplash.com", "firebasestorage.googleapis.com", "m.media-amazon.com", "api.qrserver.com", "i.pinimg.com"],
     remotePatterns: [
       {
         protocol: "https",
@@ -18,6 +18,10 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "api.qrserver.com",
+      },
+      {
+        protocol: "https",
+        hostname: "i.pinimg.com",
       },
     ],
   },

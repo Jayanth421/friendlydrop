@@ -7,8 +7,8 @@ export function RecommendedProducts({ title, products }: { title?: string; produ
   }
 
   return (
-    <section className="space-y-3">
-      <h2 className="font-display text-2xl font-semibold text-ink">{title ?? "Recommended Products"}</h2>
+    <section className="space-y-4 border-t border-[#dddbdc] pt-8">
+      <h2 className="text-2xl text-[#262626]">{title ?? "Recommended Products"}</h2>
       <ProductGrid products={products} />
     </section>
   );

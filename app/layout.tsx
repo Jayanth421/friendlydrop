@@ -6,6 +6,7 @@ import { AppProviders } from "@/components/providers/app-providers";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { getStoreSettings } from "@/lib/firebase/firestore";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
@@ -13,17 +14,25 @@ const cormorant = Cormorant_Garamond({ subsets: ["latin"], variable: "--font-cor
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: {
-    default: "FriendlyDrop - Custom Photo Prints & Personalized Gifts",
-    template: "%s | FriendlyDrop",
-  },
-  description:
-    "Shop premium custom photo prints, stickers, and personalized gifts with secure payments and fast delivery.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getStoreSettings();
+  const storeName = settings.storeName || "FriendlyDrop";
+  const titlePrefix = settings.brandPrefix?.trim() ? `${settings.brandPrefix.trim()} ${storeName}` : storeName;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return {
+    title: {
+      default: `${titlePrefix} - Luxury Fashion Commerce`,
+      template: `%s | ${titlePrefix}`,
+    },
+    description:
+      settings.brandTagline ?? "Premium fashion marketplace with AI recommendations, secure payments, and fast delivery.",
+    metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  };
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const settings = await getStoreSettings();
+
   return (
     <html lang="en" className={`${manrope.variable} ${spaceGrotesk.variable} ${cormorant.variable}`} suppressHydrationWarning>
       <body className="min-h-screen font-sans">
@@ -42,9 +51,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             `}
           </Script>
           <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
-          <Navbar />
+          <Navbar storeName={settings.storeName} brandPrefix={settings.brandPrefix} logoUrl={settings.logoUrl} />
           {children}
-          <Footer />
+          <Footer
+            storeName={settings.storeName}
+            brandPrefix={settings.brandPrefix}
+            brandTagline={settings.brandTagline}
+            supportEmail={settings.supportEmail}
+            supportPhone={settings.supportPhone}
+          />
           <MobileBottomNav />
         </AppProviders>
       </body>

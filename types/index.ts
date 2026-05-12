@@ -710,6 +710,9 @@ export interface SocialShareLink {
 export interface StoreSettings {
   id: "default";
   storeName: string;
+  brandPrefix?: string;
+  brandTagline?: string;
+  logoUrl?: string;
   supportEmail: string;
   supportPhone: string;
   taxRate: number;

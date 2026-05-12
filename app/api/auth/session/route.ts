@@ -7,6 +7,20 @@ import { UserRole } from "@/types";
 
 export const runtime = "nodejs";
 
+function normalizePhone(phone?: string) {
+  if (!phone) {
+    return undefined;
+  }
+
+  const cleaned = phone.replace(/[^\d+]/g, "").trim();
+
+  if (cleaned.length < 8 || cleaned.length > 16) {
+    return undefined;
+  }
+
+  return cleaned;
+}
+
 function getEmails(envKey: string) {
   return (process.env[envKey] ?? "")
     .split(",")
@@ -91,7 +105,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { idToken } = (await request.json()) as { idToken?: string };
+    const { idToken, phone } = (await request.json()) as { idToken?: string; phone?: string };
 
     if (!idToken) {
       return NextResponse.json({ error: "idToken is required" }, { status: 400 });
@@ -108,6 +122,7 @@ export async function POST(request: NextRequest) {
       id: decoded.uid,
       name: decoded.name ?? "Customer",
       email,
+      phone: normalizePhone(phone),
       role,
       status: "active",
       twoFactorEnabled: false,

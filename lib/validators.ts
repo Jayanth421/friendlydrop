@@ -338,6 +338,9 @@ const webhookSchema = z.object({
 
 export const storeSettingsSchema = z.object({
   storeName: z.string().min(2),
+  brandPrefix: z.string().max(30).optional(),
+  brandTagline: z.string().max(180).optional(),
+  logoUrl: z.string().url().optional().or(z.literal("")),
   supportEmail: z.string().email(),
   supportPhone: z.string().min(8),
   taxRate: z.number().min(0).max(100),

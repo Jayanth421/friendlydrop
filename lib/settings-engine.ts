@@ -399,6 +399,9 @@ export function withIntegrationHealth(settings: StoreSettings): StoreSettings {
 export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   id: "default",
   storeName: "FriendlyDrop",
+  brandPrefix: "Maison",
+  brandTagline: "Luxury-ready fashion commerce with AI styling.",
+  logoUrl: "",
   supportEmail: "help@friendlydrop.in",
   supportPhone: "+91 98765 43210",
   taxRate: 18,

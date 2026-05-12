@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   }
 
   const category = request.nextUrl.searchParams.get("category") ?? undefined;
-  const search = request.nextUrl.searchParams.get("q") ?? undefined;
+  const search = request.nextUrl.searchParams.get("search") ?? request.nextUrl.searchParams.get("q") ?? undefined;
   const sortParam = request.nextUrl.searchParams.get("sort");
   const minPrice = request.nextUrl.searchParams.get("minPrice");
   const maxPrice = request.nextUrl.searchParams.get("maxPrice");

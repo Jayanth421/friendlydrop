@@ -5,34 +5,32 @@ import Image from "next/image";
 
 export function ProductGallery({ images, title }: { images: string[]; title: string }) {
   const [selected, setSelected] = useState(images[0]);
-  const [origin, setOrigin] = useState("50% 50%");
 
   return (
     <div className="space-y-3">
-      <div
-        className="group relative aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-white"
-        onMouseMove={(event) => {
-          const rect = event.currentTarget.getBoundingClientRect();
-          const x = ((event.clientX - rect.left) / rect.width) * 100;
-          const y = ((event.clientY - rect.top) / rect.height) * 100;
-          setOrigin(`${x}% ${y}%`);
-        }}
-      >
-        <Image
-          src={selected}
-          alt={title}
-          fill
-          className="object-cover transition-transform duration-300 group-hover:scale-[1.45]"
-          style={{ transformOrigin: origin }}
-          sizes="(max-width: 1024px) 100vw, 50vw"
-        />
+      <div className="relative overflow-hidden bg-[#f3f3f3]">
+        <div className="relative aspect-[4/5] w-full">
+          <Image
+            src={selected}
+            alt={title}
+            fill
+            className="object-cover"
+            sizes="(max-width: 1024px) 100vw, 55vw"
+            priority
+          />
+        </div>
       </div>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
         {images.map((image) => (
           <button
             key={image}
             onClick={() => setSelected(image)}
-            className={`relative aspect-square overflow-hidden rounded-xl border ${selected === image ? "border-ink" : "border-slate-200"}`}
+            className={`relative aspect-[4/5] overflow-hidden border transition ${
+              selected === image
+                ? "border-[#262626]"
+                : "border-[#dddbdc] hover:border-[#a7a7a7]"
+            }`}
+            aria-label="Select product image"
           >
             <Image src={image} alt={`${title} thumbnail`} fill className="object-cover" sizes="120px" />
           </button>

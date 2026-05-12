@@ -33,15 +33,15 @@ export function ReviewForm({ productId }: { productId: string }) {
   };
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-ink">Write a review</h3>
-      <select value={rating} onChange={(event) => setRating(Number(event.target.value))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
+    <form onSubmit={submit} className="space-y-4 border border-[#dddbdc] bg-white p-4 md:p-5">
+      <h3 className="text-[12px] uppercase tracking-[0.08em] text-[#262626]">Write a review</h3>
+      <select value={rating} onChange={(event) => setRating(Number(event.target.value))} className="h-11 border border-[#dddbdc] px-3 text-sm text-[#262626] outline-none focus:border-[#262626]">
         {[5, 4, 3, 2, 1].map((value) => (
           <option key={value} value={value}>{value} Star</option>
         ))}
       </select>
-      <Textarea value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Share your experience" required />
-      <Button disabled={submitting}>{submitting ? "Submitting..." : "Submit Review"}</Button>
+      <Textarea className="rounded-none border-[#dddbdc] text-sm focus-visible:ring-0 focus-visible:ring-offset-0" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Share your experience" required />
+      <Button className="h-11 rounded-none bg-[#262626] text-xs font-medium uppercase tracking-[0.12em] text-white hover:bg-black" disabled={submitting}>{submitting ? "Submitting..." : "Submit Review"}</Button>
     </form>
   );
 }
