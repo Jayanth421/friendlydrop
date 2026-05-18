@@ -12,7 +12,7 @@ export function ProductGrid({
     <div
       className={
         variant === "listing"
-          ? "grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-4 lg:grid-cols-4"
+          ? "grid grid-cols-2 gap-0 border-l border-t border-[#e6e7eb] sm:gap-3 sm:border-0 lg:grid-cols-4 lg:gap-4"
           : "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
       }
     >

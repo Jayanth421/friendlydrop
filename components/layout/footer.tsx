@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 interface FooterProps {
   storeName: string;
@@ -9,10 +12,11 @@ interface FooterProps {
 }
 
 export function Footer({ storeName, brandPrefix, brandTagline, supportEmail, supportPhone }: FooterProps) {
+  const pathname = usePathname();
   const brandName = brandPrefix?.trim() ? `${brandPrefix.trim()} ${storeName}` : storeName;
 
   return (
-    <footer className="border-t border-[#dddbdc] bg-[#f5f4f4]">
+    <footer className={`border-t border-[#dddbdc] bg-[#f5f4f4] ${pathname === "/products" ? "hidden lg:block" : ""}`}>
       <div className="mx-auto max-w-[1400px] px-4 py-12 md:px-10">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">

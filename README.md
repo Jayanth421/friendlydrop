@@ -78,11 +78,6 @@ Required groups:
   - `RAZORPAY_KEY_ID`
   - `RAZORPAY_KEY_SECRET`
   - `STRIPE_SECRET_KEY`
-- Qikink product sync:
-  - `QIKINK_PRODUCTS_ENDPOINT` (preferred) or `QIKINK_API_BASE_URL` + `QIKINK_PRODUCTS_PATH`
-  - `QIKINK_BEARER_TOKEN` or `QIKINK_API_KEY` (+ optional `QIKINK_API_SECRET`)
-  - Optional: `QIKINK_STORE_ID`, `QIKINK_TIMEOUT_MS`, `QIKINK_LIMIT_PARAM`, `QIKINK_PAGE_PARAM`
-  - Optional webhook secret: `QIKINK_WEBHOOK_SECRET` (for `/api/integrations/qikink/products`)
 - Email:
   - `RESEND_API_KEY`
   - `EMAIL_FROM`
@@ -123,14 +118,6 @@ npm run lint
 npm run typecheck
 npm run build
 ```
-
-## Qikink Product Import
-
-1. Configure Qikink env variables in `.env.local`.
-2. Open `Admin -> Products`.
-3. Use **Import Products from Qikink**.
-4. `upsert` mode updates existing items by SKU and creates missing ones.
-5. Optional: configure Qikink to push payloads to `/api/integrations/qikink/products` using `Authorization: Bearer <QIKINK_WEBHOOK_SECRET>`.
 
 ## Firestore Collections (high level)
 

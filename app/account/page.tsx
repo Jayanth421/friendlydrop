@@ -1,8 +1,21 @@
 import Link from "next/link";
+import type { ComponentType } from "react";
 import { requireUser } from "@/lib/auth/session";
 import { getUserById, getUserOrders, getUserTransactions, getWishlist } from "@/lib/firebase/firestore";
-import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  BadgeIndianRupee,
+  ChevronRight,
+  CreditCard,
+  Gift,
+  Grid2X2,
+  MapPin,
+  Package,
+  ShieldCheck,
+  TicketPercent,
+  UserRound,
+  Wallet,
+} from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 
 export default async function AccountPage() {
   const sessionUser = await requireUser();
@@ -13,116 +26,80 @@ export default async function AccountPage() {
     getWishlist(sessionUser.uid),
   ]);
 
-  const primaryAddress = profile?.addresses?.[0] ?? orders[0]?.address ?? null;
+  const addressesCount = profile?.addresses?.length ?? 0;
+  const cardsCount = transactions.filter((item) => item.provider === "razorpay" || item.provider === "stripe").length;
+  const upiCount = transactions.filter((item) => item.provider === "upi_offline").length;
+  const walletBalance = profile?.walletBalance ?? 0;
 
   return (
-    <main className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6">
-        <h1 className="font-display text-3xl font-bold text-ink">My Dashboard</h1>
-        <p className="mt-2 text-sm text-slate-600">Manage your profile, orders, addresses, wishlist, and payments.</p>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Orders</p>
-            <p className="mt-1 text-2xl font-semibold text-ink">{orders.length}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Wishlist</p>
-            <p className="mt-1 text-2xl font-semibold text-ink">{wishlistIds.length}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Total Spent</p>
-            <p className="mt-1 text-2xl font-semibold text-ink">{formatCurrency(profile?.totalSpend ?? 0)}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 p-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Loyalty Points</p>
-            <p className="mt-1 text-2xl font-semibold text-ink">{profile?.loyaltyPoints ?? 0}</p>
-          </div>
+    <main className="mx-auto max-w-[430px] bg-[#f2f2f4] pb-10 pt-2 md:mt-6 md:rounded-lg md:border md:border-[#e3e4e8] md:bg-white md:shadow-sm">
+      <section className="h-[170px] border-y border-[#e6e7eb] bg-[#f0f0f2]" />
+      <section className="-mt-16 flex justify-center">
+        <div className="h-[126px] w-[126px] bg-[#7f8082] p-4">
+          <div className="mx-auto mt-2 h-10 w-10 rounded-full bg-[#cfd0d3]" />
+          <div className="mx-auto mt-3 h-12 w-20 rounded-t-[60px] bg-[#cfd0d3]" />
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="text-lg font-semibold text-ink">Profile Details</h2>
-          <div className="mt-3 space-y-1 text-sm text-slate-600">
-            <p>Name: {profile?.name ?? sessionUser.name}</p>
-            <p>Email: {profile?.email ?? sessionUser.email}</p>
-            <p>Phone: {profile?.phone ?? "-"}</p>
-            <p>Role: {profile?.role ?? sessionUser.role}</p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="text-lg font-semibold text-ink">Saved Address</h2>
-          {primaryAddress ? (
-            <div className="mt-3 space-y-1 text-sm text-slate-600">
-              <p>{primaryAddress.fullName}</p>
-              <p>{primaryAddress.line1}</p>
-              {primaryAddress.line2 ? <p>{primaryAddress.line2}</p> : null}
-              <p>
-                {primaryAddress.city}, {primaryAddress.state} {primaryAddress.postalCode}
-              </p>
-              <p>{primaryAddress.country}</p>
-              <p>{primaryAddress.phone}</p>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-500">No saved addresses yet.</p>
-          )}
-        </div>
+      <section className="px-5 pb-2 pt-4 text-center">
+        <p className="text-[18px] font-semibold text-[#1f2937]">{profile?.name ?? sessionUser.name ?? "Your Account"}</p>
+        <p className="mt-1 text-[13px] text-[#7f8797]">{profile?.email ?? sessionUser.email}</p>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-ink">Order History</h2>
-            <Link href="/orders" className="text-sm text-blue-600 hover:underline">View all</Link>
-          </div>
-          <div className="mt-3 space-y-3">
-            {orders.slice(0, 5).map((order) => (
-              <Link key={order.id} href={`/orders/${order.id}`} className="block rounded-lg border border-slate-200 p-3 text-sm">
-                <p className="font-medium text-ink">Order #{order.id}</p>
-                <p className="text-slate-500">{formatDate(order.createdAt)}</p>
-                <div className="mt-1 flex items-center justify-between">
-                  <span className="text-slate-600">{order.status}</span>
-                  <span className="font-semibold text-ink">{formatCurrency(order.totalAmount)}</span>
-                </div>
-              </Link>
-            ))}
-            {!orders.length ? <p className="text-sm text-slate-500">No orders placed yet.</p> : null}
-          </div>
-        </div>
+      <div className="mt-3 h-2 bg-[#ececef]" />
+      <AccountMenuItem href="/orders" title="Orders" subtitle={`Check your order status${orders.length ? ` • ${orders.length} orders` : ""}`} icon={Package} />
+      <AccountMenuItem href="/wishlist" title="Collections & Wishlist" subtitle={`All your curated product collections${wishlistIds.length ? ` • ${wishlistIds.length} saved` : ""}`} icon={Grid2X2} />
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-ink">Payment History</h2>
-          </div>
-          <div className="mt-3 space-y-3">
-            {transactions.slice(0, 5).map((transaction) => (
-              <div key={transaction.id} className="rounded-lg border border-slate-200 p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-ink">{transaction.provider.replace("_", " ")}</p>
-                  <span className="font-semibold text-ink">{formatCurrency(transaction.amount)}</span>
-                </div>
-                <p className="text-slate-500">{formatDate(transaction.createdAt)}</p>
-                <p className="text-slate-600">Status: {transaction.status}</p>
-              </div>
-            ))}
-            {!transactions.length ? <p className="text-sm text-slate-500">No payment records found.</p> : null}
-          </div>
-        </div>
-      </section>
+      <div className="mt-3 h-2 bg-[#ececef]" />
+      <AccountMenuItem href="/account?panel=credit" title="Myntra Credit" subtitle="Manage all your refunds & gift cards" icon={Gift} />
+      <AccountMenuItem href="/account?panel=mycash" title="MynCash" subtitle={`Earn MynCash as you shop and use them in checkout • ${formatCurrency(walletBalance)}`} icon={BadgeIndianRupee} />
+      <AccountMenuItem href="/account?panel=saved-cards" title="Saved Cards" subtitle={`Save your cards for faster checkout${cardsCount ? ` • ${cardsCount} used` : ""}`} icon={CreditCard} />
+      <AccountMenuItem href="/account?panel=saved-upi" title="Saved UPI" subtitle={`View your saved UPI${upiCount ? ` • ${upiCount} recent` : ""}`} icon={ShieldCheck} />
+      <AccountMenuItem href="/account?panel=wallets-bnpl" title="Wallets/BNPL" subtitle="View your saved Wallets and BNPL" icon={Wallet} />
+      <AccountMenuItem href="/account?panel=addresses" title="Addresses" subtitle={`Save addresses for a hassle-free checkout${addressesCount ? ` • ${addressesCount} saved` : ""}`} icon={MapPin} />
+      <AccountMenuItem href="/account?panel=coupons" title="Coupons" subtitle="Manage coupons for additional discounts" icon={TicketPercent} />
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-ink">Wishlist</h2>
-          <Link href="/wishlist" className="text-sm text-blue-600 hover:underline">Open wishlist</Link>
-        </div>
-        <p className="mt-2 text-sm text-slate-600">You have {wishlistIds.length} saved product(s).</p>
-        <div className="mt-4 flex gap-3">
-          <Link href="/orders"><Button>View Orders</Button></Link>
-          <Link href="/wishlist"><Button variant="secondary">Wishlist</Button></Link>
-        </div>
+      <div className="mt-3 h-2 bg-[#ececef]" />
+      <AccountMenuItem href="/account?panel=profile" title="Profile Details" subtitle="Change your profile details" icon={UserRound} />
+
+      <div className="mt-3 h-2 bg-[#ececef]" />
+      <section className="px-12 py-5">
+        <ul className="space-y-8 text-[15px] font-semibold uppercase tracking-[0.02em] text-[#656d7d]">
+          <li><Link href="/contact">FAQs</Link></li>
+          <li><Link href="/about-brand">About Us</Link></li>
+          <li><Link href="/terms-and-conditions">Terms of Use</Link></li>
+          <li><Link href="/privacy-policy">Customer Policies</Link></li>
+          <li><Link href="/contact">Useful Links</Link></li>
+        </ul>
       </section>
     </main>
+  );
+}
+
+function AccountMenuItem({
+  href,
+  title,
+  subtitle,
+  icon: Icon,
+}: {
+  href: string;
+  title: string;
+  subtitle: string;
+  icon: ComponentType<{ className?: string }>;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 border-b border-[#ebecef] bg-white px-4 py-4 transition hover:bg-[#fafbfc]"
+    >
+      <span className="inline-flex h-9 w-9 items-center justify-center text-[#8b93a4]">
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[19px] font-semibold leading-tight text-[#1f2a44]">{title}</p>
+        <p className="mt-1 text-[14px] leading-tight text-[#8b93a4]">{subtitle}</p>
+      </div>
+      <ChevronRight className="h-5 w-5 shrink-0 text-[#8f95a6]" />
+    </Link>
   );
 }

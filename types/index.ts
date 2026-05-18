@@ -561,6 +561,7 @@ export interface PluginApp {
   status: "installed" | "disabled" | "uninstalled";
   apiEndpoint?: string;
   webhookEndpoint?: string;
+  zipFileUrl?: string;
   installedAt: string;
   updatedAt: string;
 }

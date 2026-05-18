@@ -404,6 +404,7 @@ export const pluginAppSchema = z.object({
   status: z.enum(["installed", "disabled", "uninstalled"]).optional(),
   apiEndpoint: z.string().url().optional(),
   webhookEndpoint: z.string().url().optional(),
+  zipFileUrl: z.string().url().optional(),
 });
 
 export const pluginAppUpdateSchema = z.object({
@@ -411,6 +412,7 @@ export const pluginAppUpdateSchema = z.object({
   version: z.string().min(1).optional(),
   apiEndpoint: z.string().url().optional(),
   webhookEndpoint: z.string().url().optional(),
+  zipFileUrl: z.string().url().optional(),
 });
 
 export const mobileAppControlSchema = z.object({

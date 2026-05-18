@@ -1,37 +1,57 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Home, Search, ShoppingBag, Heart, User } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Sparkles, User, Wallet } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const links = [
-  { href: "/", icon: Home, label: "Home" },
-  { href: "/search", icon: Search, label: "Search" },
-  { href: "/cart", icon: ShoppingBag, label: "Cart" },
-  { href: "/wishlist", icon: Heart, label: "Wishlist" },
-  { href: "/account", icon: User, label: "Account" },
+  { href: "/", icon: "brand", label: "Home" },
+  { href: "/products?price=under-999", icon: Wallet, label: "Under ₹999", queryKey: "price", queryValue: "under-999" },
+  { href: "/products?section=beauty", icon: Sparkles, label: "Beauty", queryKey: "section", queryValue: "beauty" },
+  { href: "/account", icon: User, label: "Profile" },
 ];
 
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  if (pathname === "/products") {
+    return null;
+  }
+
+  const isActive = (href: string, queryKey?: string, queryValue?: string) => {
+    const [path] = href.split("?");
+    if (pathname !== path) return false;
+    if (!queryKey) return true;
+    return searchParams.get(queryKey) === queryValue;
+  };
 
   return (
-    <nav className="glass-panel fixed bottom-3 left-3 right-3 z-40 rounded-2xl p-2 shadow-lg md:hidden">
-      <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
-        {links.map(({ href, icon: Icon, label }) => (
+    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#e6e7ea] bg-white md:hidden">
+      <div className="mx-auto grid max-w-[430px] grid-cols-4">
+        {links.map(({ href, icon: Icon, label, queryKey, queryValue }) => {
+          const active = isActive(href, queryKey, queryValue);
+          return (
           <Link
             key={href}
             href={href}
-            className={`flex flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-medium transition ${
-              pathname === href
-                ? "bg-black text-white dark:bg-white dark:text-black"
-                : "text-slate-600 dark:text-slate-300"
-            }`}
+            className={cn(
+              "flex flex-col items-center justify-center gap-1 px-2 py-2.5 text-[11px] font-medium transition",
+              active ? "text-[#ff3f84]" : "text-[#313746]",
+            )}
           >
-            <Icon className="h-4 w-4" />
+            {Icon === "brand" ? (
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-[#ff3f84] via-[#ff8f3f] to-[#7c5cff] text-[9px] font-bold text-white">
+                M
+              </span>
+            ) : (
+              <Icon className="h-4 w-4" />
+            )}
             <span>{label}</span>
           </Link>
-        ))}
+        );
+        })}
       </div>
     </nav>
   );

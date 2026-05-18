@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
   Copy,
@@ -114,11 +114,18 @@ interface BuilderGlobalTheme {
   neoBorderRadius: number;
 }
 
+interface BuilderBreakpoints {
+  desktop: number;
+  tablet: number;
+  mobile: number;
+}
+
 interface BuilderProjectState {
   pages: BuilderPage[];
   activePageId: string;
   selectedSectionId: string | null;
   device: BuilderDevice;
+  breakpoints: BuilderBreakpoints;
   zoom: number;
   showGrid: boolean;
   snapGrid: boolean;
@@ -133,6 +140,14 @@ interface BuilderProjectState {
 }
 
 const STORAGE_KEY = "friendlydrop-builder-studio-v2";
+const REVISION_STORAGE_KEY = "friendlydrop-builder-revisions-v1";
+const MAX_REVISIONS = 25;
+
+interface BuilderRevision {
+  id: string;
+  savedAt: string;
+  snapshot: string;
+}
 
 const COMPONENT_LIBRARY: Array<{ kind: BuilderSectionKind; label: string; details: string }> = [
   { kind: "hero", label: "Hero", details: "Framer-style cinematic hero block." },
@@ -218,6 +233,11 @@ const DEFAULT_PROJECT: BuilderProjectState = {
   activePageId: "page-home",
   selectedSectionId: null,
   device: "desktop",
+  breakpoints: {
+    desktop: 1280,
+    tablet: 860,
+    mobile: 390,
+  },
   zoom: 100,
   showGrid: true,
   snapGrid: true,
@@ -412,19 +432,69 @@ function buildSection(kind: BuilderSectionKind): BuilderSection {
   };
 }
 
-function getCanvasWidth(device: BuilderDevice) {
-  if (device === "mobile") return "w-[390px] max-w-full";
-  if (device === "tablet") return "w-[860px] max-w-full";
-  return "w-full";
+function getCanvasWidth(device: BuilderDevice, breakpoints: BuilderBreakpoints) {
+  if (device === "mobile") return Math.max(280, breakpoints.mobile || 390);
+  if (device === "tablet") return Math.max(640, breakpoints.tablet || 860);
+  return Math.max(960, breakpoints.desktop || 1280);
+}
+
+function normalizeProjectState(input: Partial<BuilderProjectState> | null | undefined): BuilderProjectState {
+  const fallback = deepClone(DEFAULT_PROJECT);
+  if (!input?.pages?.length) {
+    return fallback;
+  }
+
+  const pages = input.pages
+    .filter((page): page is BuilderPage => !!page?.id && Array.isArray(page.sections))
+    .map((page) => ({
+      ...page,
+      sections: page.sections.filter((section): section is BuilderSection => !!section?.id),
+    }));
+
+  if (!pages.length) {
+    return fallback;
+  }
+
+  const activePageId = pages.some((page) => page.id === input.activePageId) ? (input.activePageId as string) : pages[0].id;
+  const activePage = pages.find((page) => page.id === activePageId) ?? pages[0];
+  const selectedSectionId =
+    input.selectedSectionId && activePage.sections.some((section) => section.id === input.selectedSectionId)
+      ? input.selectedSectionId
+      : activePage.sections[0]?.id ?? null;
+
+  return {
+    ...fallback,
+    ...input,
+    pages,
+    activePageId,
+    selectedSectionId,
+    breakpoints: {
+      ...fallback.breakpoints,
+      ...(input.breakpoints ?? {}),
+    },
+    globalTheme: {
+      ...fallback.globalTheme,
+      ...(input.globalTheme ?? {}),
+    },
+    templates: Array.isArray(input.templates) ? input.templates : fallback.templates,
+    assets: Array.isArray(input.assets) ? input.assets : fallback.assets,
+    collaborators: Array.isArray(input.collaborators) ? input.collaborators : fallback.collaborators,
+    device:
+      input.device === "desktop" || input.device === "tablet" || input.device === "mobile" ? input.device : fallback.device,
+  };
 }
 
 export function VisualBuilder() {
   const [project, setProject] = useState<BuilderProjectState>(DEFAULT_PROJECT);
   const [historyPast, setHistoryPast] = useState<BuilderProjectState[]>([]);
   const [historyFuture, setHistoryFuture] = useState<BuilderProjectState[]>([]);
+  const [revisions, setRevisions] = useState<BuilderRevision[]>([]);
+  const [sectionClipboard, setSectionClipboard] = useState<BuilderSection | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sectionId: string } | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [templatePreset, setTemplatePreset] = useState(Object.keys(PAGE_TEMPLATES)[0]);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const activePage = useMemo(
     () => project.pages.find((page) => page.id === project.activePageId) ?? project.pages[0],
@@ -457,23 +527,62 @@ export function VisualBuilder() {
     if (!raw) return;
 
     try {
-      const parsed = JSON.parse(raw) as BuilderProjectState;
-      if (parsed?.pages?.length) {
-        setProject(parsed);
-      }
+      const parsed = JSON.parse(raw) as Partial<BuilderProjectState>;
+      setProject(normalizeProjectState(parsed));
     } catch (error) {
       console.error("Could not parse builder state", error);
     }
   }, []);
 
   useEffect(() => {
+    const raw = localStorage.getItem(REVISION_STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as BuilderRevision[];
+      if (Array.isArray(parsed)) {
+        setRevisions(parsed.filter((item) => !!item?.snapshot && !!item?.savedAt).slice(0, MAX_REVISIONS));
+      }
+    } catch (error) {
+      console.error("Could not parse revision history", error);
+    }
+  }, []);
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+      const snapshot = JSON.stringify(project);
+      localStorage.setItem(STORAGE_KEY, snapshot);
       setSavedAt(new Date().toLocaleTimeString("en-IN"));
+      setRevisions((prev) => {
+        if (prev[0]?.snapshot === snapshot) {
+          return prev;
+        }
+
+        const next: BuilderRevision[] = [
+          {
+            id: makeId("rev"),
+            savedAt: new Date().toISOString(),
+            snapshot,
+          },
+          ...prev,
+        ].slice(0, MAX_REVISIONS);
+        localStorage.setItem(REVISION_STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
     }, 4500);
 
     return () => window.clearInterval(timer);
   }, [project]);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setContextMenu(null);
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, []);
 
   const commit = (updater: (prev: BuilderProjectState) => BuilderProjectState) => {
     setProject((prev) => {
@@ -527,6 +636,46 @@ export function VisualBuilder() {
       next.splice(index + 1, 0, copy);
       return { ...page, sections: next };
     });
+  };
+
+  const copySection = (sectionId: string) => {
+    const source = activePage.sections.find((section) => section.id === sectionId);
+    if (!source) {
+      toast.error("Section not found");
+      return;
+    }
+    setSectionClipboard(deepClone(source));
+    toast.success("Section copied");
+  };
+
+  const pasteSection = (targetSectionId?: string) => {
+    if (!sectionClipboard) {
+      toast.error("Copy a section first");
+      return;
+    }
+
+    updateActivePage((page) => {
+      const nextSection: BuilderSection = {
+        ...deepClone(sectionClipboard),
+        id: makeId("section"),
+        name: `${sectionClipboard.name} copy`,
+      };
+
+      if (!targetSectionId) {
+        return { ...page, sections: [...page.sections, nextSection] };
+      }
+
+      const targetIndex = page.sections.findIndex((section) => section.id === targetSectionId);
+      if (targetIndex < 0) {
+        return { ...page, sections: [...page.sections, nextSection] };
+      }
+
+      const next = [...page.sections];
+      next.splice(targetIndex + 1, 0, nextSection);
+      return { ...page, sections: next };
+    });
+
+    toast.success("Section pasted");
   };
 
   const saveSectionAsTemplate = () => {
@@ -651,10 +800,58 @@ export function VisualBuilder() {
   };
 
   const exportProject = () => {
-    navigator.clipboard
-      .writeText(JSON.stringify(project, null, 2))
-      .then(() => toast.success("Project JSON copied"))
-      .catch(() => toast.error("Unable to copy project"));
+    try {
+      const payload = JSON.stringify(project, null, 2);
+      const blob = new Blob([payload], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `friendlydrop-builder-${Date.now()}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast.success("Project exported");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to export project");
+    }
+  };
+
+  const triggerImportProject = () => {
+    importInputRef.current?.click();
+  };
+
+  const handleImportProject = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw) as Partial<BuilderProjectState>;
+      const normalized = normalizeProjectState(parsed);
+      setHistoryPast((prev) => [...prev.slice(-79), deepClone(project)]);
+      setHistoryFuture([]);
+      setProject(normalized);
+      toast.success("Project imported");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not import this file");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const restoreRevision = (revision: BuilderRevision) => {
+    try {
+      const parsed = JSON.parse(revision.snapshot) as Partial<BuilderProjectState>;
+      const normalized = normalizeProjectState(parsed);
+      setHistoryPast((prev) => [...prev.slice(-79), deepClone(project)]);
+      setHistoryFuture([]);
+      setProject(normalized);
+      toast.success("Revision restored");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not restore revision");
+    }
   };
 
   const selectedPresenceColor = ["bg-rose-500", "bg-cyan-500", "bg-amber-500"];
@@ -674,6 +871,9 @@ export function VisualBuilder() {
             <Button type="button" variant="outline" onClick={handleRedo} disabled={!historyFuture.length}>
               <Redo2 className="mr-1 h-4 w-4" /> Redo
             </Button>
+            <Button type="button" variant="outline" onClick={triggerImportProject}>
+              <FolderTree className="mr-1 h-4 w-4" /> Import
+            </Button>
             <Button type="button" variant="outline" onClick={exportProject}>
               <Save className="mr-1 h-4 w-4" /> Export
             </Button>
@@ -682,8 +882,10 @@ export function VisualBuilder() {
             </Button>
           </div>
         </div>
+        <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportProject} />
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
           <span>Autosave every 4.5s{savedAt ? ` | last save ${savedAt}` : ""}</span>
+          <span>{sectionClipboard ? "Section clipboard ready" : "Clipboard empty"}</span>
           <span>Realtime collaboration: {project.liveCollabEnabled ? "enabled" : "disabled"}</span>
           <span>{project.lastPublishedAt ? `Published at ${new Date(project.lastPublishedAt).toLocaleString("en-IN")}` : "Not published yet"}</span>
         </div>
@@ -848,6 +1050,21 @@ export function VisualBuilder() {
                     <button
                       type="button"
                       className="rounded border border-slate-300 px-1 py-0.5 dark:border-slate-700"
+                      onClick={() => copySection(section.id)}
+                    >
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-300 px-1 py-0.5 dark:border-slate-700"
+                      onClick={() => pasteSection(section.id)}
+                      disabled={!sectionClipboard}
+                    >
+                      Paste
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-300 px-1 py-0.5 dark:border-slate-700"
                       onClick={() => updateSection(section.id, { hidden: !section.hidden })}
                     >
                       {section.hidden ? "Show" : "Hide"}
@@ -955,8 +1172,8 @@ export function VisualBuilder() {
                   /{activePage.slug} | {activePage.kind}
                 </h2>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 rounded-xl border border-slate-300/60 p-1 dark:border-slate-700">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 rounded-xl border border-slate-300/60 p-1 dark:border-slate-700">
                   <button
                     type="button"
                     className={cn(
@@ -986,8 +1203,68 @@ export function VisualBuilder() {
                     onClick={() => commit((prev) => ({ ...prev, device: "mobile" }))}
                   >
                     <Smartphone className="h-4 w-4" />
-                  </button>
-                </div>
+                    </button>
+                  </div>
+
+                  <div className="hidden items-center gap-1 rounded-xl border border-slate-300/60 p-1 text-[11px] dark:border-slate-700 md:flex">
+                    <label className="inline-flex items-center gap-1">
+                      D
+                      <input
+                        type="number"
+                        min={960}
+                        max={1920}
+                        className="h-7 w-16 rounded border border-slate-300 px-1 dark:border-slate-700 dark:bg-slate-950"
+                        value={project.breakpoints.desktop}
+                        onChange={(event) =>
+                          commit((prev) => ({
+                            ...prev,
+                            breakpoints: {
+                              ...prev.breakpoints,
+                              desktop: Number(event.target.value) || prev.breakpoints.desktop,
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="inline-flex items-center gap-1">
+                      T
+                      <input
+                        type="number"
+                        min={640}
+                        max={1280}
+                        className="h-7 w-16 rounded border border-slate-300 px-1 dark:border-slate-700 dark:bg-slate-950"
+                        value={project.breakpoints.tablet}
+                        onChange={(event) =>
+                          commit((prev) => ({
+                            ...prev,
+                            breakpoints: {
+                              ...prev.breakpoints,
+                              tablet: Number(event.target.value) || prev.breakpoints.tablet,
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="inline-flex items-center gap-1">
+                      M
+                      <input
+                        type="number"
+                        min={280}
+                        max={640}
+                        className="h-7 w-16 rounded border border-slate-300 px-1 dark:border-slate-700 dark:bg-slate-950"
+                        value={project.breakpoints.mobile}
+                        onChange={(event) =>
+                          commit((prev) => ({
+                            ...prev,
+                            breakpoints: {
+                              ...prev.breakpoints,
+                              mobile: Number(event.target.value) || prev.breakpoints.mobile,
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
 
                 <label className="inline-flex items-center gap-1 text-xs">
                   <ZoomIn className="h-3.5 w-3.5" />
@@ -1035,9 +1312,13 @@ export function VisualBuilder() {
               const kind = event.dataTransfer.getData("application/x-builder-component") as BuilderSectionKind;
               if (kind) addSection(kind);
             }}
+            onClick={() => setContextMenu(null)}
           >
             <div className="mx-auto origin-top" style={{ transform: `scale(${project.zoom / 100})` }}>
-              <div className={cn("mx-auto space-y-3 transition-all", getCanvasWidth(project.device))}>
+              <div
+                className="mx-auto space-y-3 transition-all"
+                style={{ width: `${getCanvasWidth(project.device, project.breakpoints)}px`, maxWidth: "100%" }}
+              >
                 {activePage.sections.map((section) => {
                   const active = section.id === project.selectedSectionId;
                   if (section.hidden) return null;
@@ -1054,6 +1335,10 @@ export function VisualBuilder() {
                         section.width === "boxed" ? "mx-auto max-w-4xl" : "",
                       )}
                       onClick={() => !section.locked && commit((prev) => ({ ...prev, selectedSectionId: section.id }))}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        setContextMenu({ x: event.clientX, y: event.clientY, sectionId: section.id });
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" && !section.locked) {
                           commit((prev) => ({ ...prev, selectedSectionId: section.id }));
@@ -1137,6 +1422,31 @@ export function VisualBuilder() {
                 })}
               </div>
             </div>
+            {contextMenu ? (
+              <div
+                className="fixed z-50 min-w-44 rounded-lg border border-slate-300 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                style={{ left: contextMenu.x, top: contextMenu.y }}
+              >
+                <button type="button" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => { copySection(contextMenu.sectionId); setContextMenu(null); }}>
+                  Copy section
+                </button>
+                <button type="button" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50" disabled={!sectionClipboard} onClick={() => { pasteSection(contextMenu.sectionId); setContextMenu(null); }}>
+                  Paste after
+                </button>
+                <button type="button" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => { duplicateSection(contextMenu.sectionId); setContextMenu(null); }}>
+                  Duplicate
+                </button>
+                <button type="button" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => { moveSection(contextMenu.sectionId, "up"); setContextMenu(null); }}>
+                  Move up
+                </button>
+                <button type="button" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => { moveSection(contextMenu.sectionId, "down"); setContextMenu(null); }}>
+                  Move down
+                </button>
+                <button type="button" className="block w-full rounded px-2 py-1 text-left text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" onClick={() => { removeSection(contextMenu.sectionId); setContextMenu(null); }}>
+                  Delete
+                </button>
+              </div>
+            ) : null}
           </section>
         </div>
 
@@ -1210,6 +1520,8 @@ export function VisualBuilder() {
               stats={stats}
               collaborators={project.collaborators}
               liveCollabEnabled={project.liveCollabEnabled}
+              revisions={revisions}
+              onRestoreRevision={restoreRevision}
               onToggleCollab={(enabled) => commit((prev) => ({ ...prev, liveCollabEnabled: enabled }))}
             />
           ) : null}
@@ -1471,11 +1783,15 @@ function AnalyticsPanel({
   stats,
   collaborators,
   liveCollabEnabled,
+  revisions,
+  onRestoreRevision,
   onToggleCollab,
 }: {
   stats: { pages: number; sections: number; hidden: number; interactions: number; performanceScore: number };
   collaborators: string[];
   liveCollabEnabled: boolean;
+  revisions: BuilderRevision[];
+  onRestoreRevision: (revision: BuilderRevision) => void;
   onToggleCollab: (enabled: boolean) => void;
 }) {
   return (
@@ -1517,6 +1833,31 @@ function AnalyticsPanel({
         <p className="mt-1 text-slate-600 dark:text-slate-300">
           Multi-page builder, header/footer system, reusable blocks, CMS-linked sections, eCommerce block support, undo/redo, responsive preview, and publish workflow.
         </p>
+      </div>
+
+      <div className="rounded-lg border border-slate-300/60 p-3 text-xs dark:border-slate-700">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold">Version history</p>
+          <span className="text-slate-500">{revisions.length} snapshots</span>
+        </div>
+        <div className="mt-2 space-y-2">
+          {revisions.length ? (
+            revisions.slice(0, 6).map((revision) => (
+              <div key={revision.id} className="flex items-center justify-between rounded border border-slate-300/60 px-2 py-1 dark:border-slate-700">
+                <span>{new Date(revision.savedAt).toLocaleString("en-IN")}</span>
+                <button
+                  type="button"
+                  className="rounded border border-slate-300 px-2 py-0.5 text-[11px] dark:border-slate-700"
+                  onClick={() => onRestoreRevision(revision)}
+                >
+                  Restore
+                </button>
+              </div>
+            ))
+          ) : (
+            <p className="text-slate-500">No revisions yet.</p>
+          )}
+        </div>
       </div>
     </div>
   );

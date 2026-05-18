@@ -1,7 +1,6 @@
 import { ProductForm } from "@/components/admin/product-form";
 import { ProductDeleteButton } from "@/components/admin/product-delete-button";
 import { BulkProductUploader } from "@/components/admin/bulk-product-uploader";
-import { QikinkImporter } from "@/components/admin/qikink-importer";
 import { requireAdminPermission } from "@/lib/auth/session";
 import { getProducts } from "@/lib/firebase/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,8 +36,6 @@ export default async function AdminProductsPage({ searchParams }: { searchParams
           seo: editingProduct.seo,
         } : undefined}
       />
-
-      <QikinkImporter />
 
       <BulkProductUploader initialProducts={products} />
 
