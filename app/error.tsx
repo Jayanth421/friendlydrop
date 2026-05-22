@@ -12,7 +12,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
 
   return (
     <main className="flex min-h-[60vh] items-center justify-center">
-      <div className="max-w-md rounded-2xl border border-red-200 bg-white p-8 text-center">
+      <div className="max-w-md  border-red-200 bg-white p-8 text-center">
         <h2 className="font-display text-2xl font-bold text-ink">Something went wrong</h2>
         <p className="mt-2 text-sm text-slate-600">Please retry. If this keeps happening, check your env setup.</p>
         {showDebug ? (

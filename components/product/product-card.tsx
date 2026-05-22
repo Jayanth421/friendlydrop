@@ -75,7 +75,7 @@ export function ProductCard({
               <p className="text-[#9ca0ae] line-through">{formatCurrency(originalPrice)}</p>
             ) : null}
             {product.discountPercent ? (
-              <p className="font-semibold text-[#ff905a]">({product.discountPercent}% OFF)</p>
+              <p className="font-semibold text-[#16a34a]">({product.discountPercent}% OFF)</p>
             ) : null}
           </div>
           <div className="flex items-center justify-between text-[11px] text-[#6f7383]">

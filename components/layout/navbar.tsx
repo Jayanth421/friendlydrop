@@ -3,78 +3,184 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Heart, Search, ShoppingBag, User, ShieldCheck, Menu, ChevronRight, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCartStore } from "@/store/use-cart-store";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { isAdminRole, isVendorRole } from "@/lib/rbac";
+import { StoreMegaMenuColumn, StoreMenuEditorConfig } from "@/types";
 
 interface NavbarProps {
   storeName: string;
   brandPrefix?: string;
   logoUrl?: string;
+  menuEditor?: StoreMenuEditorConfig;
 }
 
-const PRIMARY_LINKS = [
-  { href: "/products?section=men", label: "MEN" },
-  { href: "/products?section=women", label: "WOMEN" },
-  { href: "/products?section=kids", label: "KIDS" },
-  { href: "/products?section=home", label: "HOME" },
-  { href: "/products?section=beauty", label: "BEAUTY" },
-  { href: "/products?section=genz", label: "GENZ" },
-  { href: "/products?section=studio", label: "STUDIO", badge: "NEW" },
+interface MobileMenuNode {
+  id: string;
+  label: string;
+  href?: string;
+  children: MobileMenuNode[];
+}
+
+const FALLBACK_DESKTOP_LINKS = [
+  { id: "menu-men", href: "/products?section=men", label: "MEN" },
+  { id: "menu-women", href: "/products?section=women", label: "WOMEN" },
+  { id: "menu-kids", href: "/products?section=kids", label: "KIDS" },
+  { id: "menu-home", href: "/products?section=home", label: "HOME", showMegaMenu: true, megaMenuKey: "home" },
+  { id: "menu-beauty", href: "/products?section=beauty", label: "BEAUTY" },
+  { id: "menu-genz", href: "/products?section=genz", label: "GENZ" },
+  { id: "menu-studio", href: "/products?section=studio", label: "STUDIO", badge: "NEW" },
 ];
 
-const MEGA_MENU_HOME: Array<{ heading: string; links: string[] }> = [
+const FALLBACK_MEGA_MENU_HOME: StoreMegaMenuColumn[] = [
   {
+    id: "home-col-1",
     heading: "Bed Linen & Furnishing",
-    links: ["Bed Runners", "Mattress Protectors", "Bedsheets", "Bedding Sets", "Blankets, Quilts & Dohars", "Pillows & Covers", "Sofa Covers", "Flooring", "Carpets"],
+    links: [
+      { id: "home-col-1-link-1", label: "Bed Runners", href: "/products?category=bed-runners" },
+      { id: "home-col-1-link-2", label: "Mattress Protectors", href: "/products?category=mattress-protectors" },
+      { id: "home-col-1-link-3", label: "Bedsheets", href: "/products?category=bedsheets" },
+    ],
+    ctaLabel: "View All",
+    ctaHref: "/products?section=home",
   },
   {
+    id: "home-col-2",
     heading: "Bath",
-    links: ["Bath Towels", "Hand & Face Towels", "Beach Towels", "Bath Rugs", "Bath Robes", "Bathroom Accessories", "Shower Curtains", "Lamps & Lighting", "Floor Lamps"],
+    links: [
+      { id: "home-col-2-link-1", label: "Bath Towels", href: "/products?category=bath-towels" },
+      { id: "home-col-2-link-2", label: "Hand & Face Towels", href: "/products?category=hand-face-towels" },
+      { id: "home-col-2-link-3", label: "Bath Rugs", href: "/products?category=bath-rugs" },
+    ],
   },
   {
+    id: "home-col-3",
     heading: "Home Decor",
-    links: ["Plants & Planters", "Aromas & Candles", "Clocks", "Mirrors", "Wall Decor", "Festive Decor", "Pooja Essentials", "Wall Shelves", "Fountains"],
+    links: [
+      { id: "home-col-3-link-1", label: "Plants & Planters", href: "/products?category=plants-planters" },
+      { id: "home-col-3-link-2", label: "Aromas & Candles", href: "/products?category=aromas-candles" },
+      { id: "home-col-3-link-3", label: "Clocks", href: "/products?category=clocks" },
+    ],
   },
   {
+    id: "home-col-4",
     heading: "Furniture",
-    links: ["Home Gift Sets", "Kitchen & Table", "Table Runners", "Dinnerware & Serveware", "Cups & Mugs", "Bakeware", "Kitchen Storage", "Bar & Drinkware"],
+    links: [
+      { id: "home-col-4-link-1", label: "Home Gift Sets", href: "/products?category=home-gift-sets" },
+      { id: "home-col-4-link-2", label: "Kitchen & Table", href: "/products?category=kitchen-table" },
+      { id: "home-col-4-link-3", label: "Table Runners", href: "/products?category=table-runners" },
+    ],
   },
   {
+    id: "home-col-5",
     heading: "Storage",
-    links: ["Bins", "Hangers", "Organisers", "Hooks & Holders", "Laundry Bags", "Boxes", "Closet Organizers"],
+    links: [
+      { id: "home-col-5-link-1", label: "Bins", href: "/products?category=bins" },
+      { id: "home-col-5-link-2", label: "Hangers", href: "/products?category=hangers" },
+      { id: "home-col-5-link-3", label: "Organisers", href: "/products?category=organisers" },
+    ],
   },
 ];
 
-const MOBILE_SHOP_LINKS = [
-  { href: "/products?section=men", label: "Men" },
-  { href: "/products?section=women", label: "Women" },
-  { href: "/products?section=kids", label: "Kids" },
-  { href: "/products?section=home", label: "Home" },
-  { href: "/products?section=beauty", label: "Beauty" },
-  { href: "/products?section=genz", label: "Genz" },
+const FALLBACK_MOBILE_SHOP_LINKS = [
+  { id: "m-men", href: "/products?section=men", label: "Men" },
+  { id: "m-women", href: "/products?section=women", label: "Women" },
+  { id: "m-kids", href: "/products?section=kids", label: "Kids" },
+  { id: "m-home", href: "/products?section=home", label: "Home" },
+  { id: "m-beauty", href: "/products?section=beauty", label: "Beauty" },
+  { id: "m-genz", href: "/products?section=genz", label: "Genz" },
 ];
 
-const MOBILE_MISC_LINKS = [
-  { href: "/orders", label: "Orders" },
-  { href: "/wishlist", label: "Wishlist" },
-  { href: "/account?panel=credit", label: "Gift Cards" },
-  { href: "/contact", label: "Contact Us" },
-  { href: "/about-brand", label: "Myntra Insider" },
+const FALLBACK_MOBILE_MISC_LINKS = [
+  { id: "mm-orders", href: "/orders", label: "Orders" },
+  { id: "mm-wishlist", href: "/wishlist", label: "Wishlist" },
+  { id: "mm-credit", href: "/account?panel=credit", label: "Gift Cards" },
+  { id: "mm-contact", href: "/contact", label: "Contact Us" },
+  { id: "mm-about", href: "/about-brand", label: "Brand Story" },
 ];
 
-export function Navbar({ storeName, brandPrefix, logoUrl }: NavbarProps) {
+export function Navbar({ storeName, brandPrefix, logoUrl, menuEditor }: NavbarProps) {
   const items = useCartStore((state) => state.items);
   const { user, role, logout } = useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [openMegaMenu, setOpenMegaMenu] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileTopMenuId, setMobileTopMenuId] = useState<string | null>(null);
+  const [mobileColumnId, setMobileColumnId] = useState<string | null>(null);
   const brandName = brandPrefix?.trim() ? `${brandPrefix.trim()} ${storeName}` : storeName;
   const currentQuery = searchParams.toString();
+  const primaryLinks = menuEditor?.desktopLinks?.length ? menuEditor.desktopLinks : FALLBACK_DESKTOP_LINKS;
+  const mobileShopLinks = menuEditor?.mobileShopLinks?.length ? menuEditor.mobileShopLinks : FALLBACK_MOBILE_SHOP_LINKS;
+  const mobileMiscLinks = menuEditor?.mobileMiscLinks?.length ? menuEditor.mobileMiscLinks : FALLBACK_MOBILE_MISC_LINKS;
+  const megaMenus = menuEditor?.megaMenus?.length
+    ? menuEditor.megaMenus
+    : [{ id: "mega-home", key: "home", title: "Home", columns: FALLBACK_MEGA_MENU_HOME }];
+  const popupStyle = menuEditor?.popupStyle ?? {
+    widthPx: 1500,
+    maxColumns: 5,
+    borderRadiusPx: 16,
+    backgroundColor: "#ffffff",
+    textColor: "#222a3f",
+    headingColor: "#16a34a",
+    cardBackgroundColor: "#fbfbfc",
+    animation: "fade" as const,
+    showPromoCard: false,
+    promoImageUrl: "",
+    promoTitle: "Season Edit",
+    promoText: "Use Settings -> Site Builder -> Menu to customize this popup.",
+    promoCtaLabel: "Edit Menu",
+    promoCtaHref: "/admin/settings",
+  };
+  const activeMegaMenu = megaMenus.find((menu) => menu.key === openMegaMenu) ?? null;
+  const mobileMenuTree = useMemo<MobileMenuNode[]>(() => {
+    const toMenuKey = (value: string) => value.trim().toLowerCase().replace(/\s+/g, "-");
+    const megaMenuMap = new Map(megaMenus.map((menu) => [toMenuKey(menu.key), menu]));
+    const desktopByHref = new Map(primaryLinks.map((link) => [link.href, link]));
+
+    return mobileShopLinks.map((item) => {
+      const desktopMatch = desktopByHref.get(item.href);
+      const query = item.href.split("?")[1];
+      const section = query ? new URLSearchParams(query).get("section") : null;
+      const candidateKeys = [
+        desktopMatch?.showMegaMenu ? desktopMatch.megaMenuKey : undefined,
+        section ?? undefined,
+        item.label,
+        item.id.replace(/^m[-_]/i, ""),
+      ]
+        .filter(Boolean)
+        .map((value) => toMenuKey(String(value)));
+
+      const matchedMegaMenu = candidateKeys.map((key) => megaMenuMap.get(key)).find(Boolean) ?? null;
+      if (!matchedMegaMenu) {
+        return { id: item.id, label: item.label, href: item.href, children: [] };
+      }
+
+      return {
+        id: item.id,
+        label: item.label,
+        href: item.href,
+        children: matchedMegaMenu.columns.map((column) => ({
+          id: `${item.id}-${column.id}`,
+          label: column.heading,
+          href: column.ctaHref ?? item.href,
+          children: column.links.map((entry) => ({
+            id: `${item.id}-${column.id}-${entry.id}`,
+            label: entry.label,
+            href: entry.href,
+            children: [],
+          })),
+        })),
+      };
+    });
+  }, [megaMenus, mobileShopLinks, primaryLinks]);
+  const activeTopMenu = mobileTopMenuId ? mobileMenuTree.find((item) => item.id === mobileTopMenuId) ?? null : null;
+  const activeColumnMenu = mobileColumnId
+    ? activeTopMenu?.children.find((item) => item.id === mobileColumnId) ?? null
+    : null;
 
   const isLinkActive = (href: string) => {
     const [linkPath, linkQuery = ""] = href.split("?");
@@ -90,6 +196,8 @@ export function Navbar({ storeName, brandPrefix, logoUrl }: NavbarProps) {
 
   useEffect(() => {
     setMobileMenuOpen(false);
+    setMobileTopMenuId(null);
+    setMobileColumnId(null);
   }, [pathname, currentQuery]);
 
   useEffect(() => {
@@ -120,7 +228,7 @@ export function Navbar({ storeName, brandPrefix, logoUrl }: NavbarProps) {
         <div className="mx-auto flex h-[56px] max-w-[1520px] items-center gap-3 px-4 md:h-[78px] md:px-6">
           <button
             type="button"
-            className={`${iconButtonClass} mr-1 lg:hidden`}
+            className={`${iconButtonClass} mr-1`}
             aria-label="Open menu"
             onClick={() => setMobileMenuOpen(true)}
           >
@@ -135,7 +243,7 @@ export function Navbar({ storeName, brandPrefix, logoUrl }: NavbarProps) {
                 aria-hidden="true"
               />
             ) : (
-              <span className="rounded-full bg-gradient-to-br from-[#ff3f84] via-[#ff8f3f] to-[#7c5cff] px-2 py-0.5 text-xs font-bold text-white md:bg-none md:px-0 md:py-0 md:font-semibold md:uppercase md:tracking-[0.25em] md:text-[#262626]">
+              <span className="rounded-full bg-gradient-to-br from-[#16a34a] via-[#22c55e] to-[#4ade80] px-2 py-0.5 text-xs font-bold text-white md:bg-none md:px-0 md:py-0 md:font-semibold md:uppercase md:tracking-[0.25em] md:text-[#262626]">
                 {brandName}
               </span>
             )}
@@ -146,13 +254,14 @@ export function Navbar({ storeName, brandPrefix, logoUrl }: NavbarProps) {
             onMouseLeave={() => setOpenMegaMenu(null)}
           >
             <nav className="flex h-full items-stretch">
-              {PRIMARY_LINKS.map((link) => {
-                const active = isLinkActive(link.href) || openMegaMenu === link.label;
+              {primaryLinks.map((link) => {
+                const menuKey = link.showMegaMenu ? (link.megaMenuKey ?? link.label.toLowerCase()) : null;
+                const active = isLinkActive(link.href) || (menuKey ? openMegaMenu === menuKey : false);
                 return (
                   <div
-                    key={link.href}
+                    key={link.id}
                     className="relative"
-                    onMouseEnter={() => setOpenMegaMenu(link.label === "HOME" ? "HOME" : null)}
+                    onMouseEnter={() => setOpenMegaMenu(menuKey)}
                   >
                     <Link
                       href={link.href}
@@ -162,42 +271,104 @@ export function Navbar({ storeName, brandPrefix, logoUrl }: NavbarProps) {
                     >
                       <span>{link.label}</span>
                       {"badge" in link && link.badge ? (
-                        <span className="absolute right-0 top-[18px] text-[10px] font-bold tracking-[0.08em] text-[#ff3f6c]">
+                        <span className="absolute right-0 top-[18px] text-[10px] font-bold tracking-[0.08em] text-[#16a34a]">
                           {link.badge}
                         </span>
                       ) : null}
                     </Link>
                     {active ? (
-                      <span className="absolute bottom-0 left-3 right-3 h-[3px] bg-[#f2c126]" />
+                      <span className="absolute bottom-0 left-3 right-3 h-[3px] bg-[#22c55e]" />
                     ) : null}
                   </div>
                 );
               })}
             </nav>
 
-            {openMegaMenu === "HOME" ? (
-              <div className="absolute left-0 top-[78px] z-50 w-[min(96vw,1500px)] border border-[#e4e5ea] bg-white shadow-[0_18px_35px_-20px_rgba(17,24,39,0.45)]">
-                <div className="grid grid-cols-5">
-                  {MEGA_MENU_HOME.map((group, index) => (
+            {activeMegaMenu ? (
+              <div
+                className={`absolute left-0 top-[78px] z-50 border border-[#e4e5ea] shadow-[0_18px_35px_-20px_rgba(17,24,39,0.45)] ${
+                  popupStyle.animation === "slide"
+                    ? "animate-in slide-in-from-top-4 duration-200"
+                    : popupStyle.animation === "fade"
+                      ? "animate-in fade-in duration-200"
+                      : ""
+                }`}
+                style={{
+                  width: `min(96vw, ${popupStyle.widthPx}px)`,
+                  background: popupStyle.backgroundColor,
+                  color: popupStyle.textColor,
+                  borderRadius: `${popupStyle.borderRadiusPx}px`,
+                }}
+              >
+                <div
+                  className="grid"
+                  style={{
+                    gridTemplateColumns: `repeat(${Math.max(1, Math.min(popupStyle.maxColumns + (popupStyle.showPromoCard ? 1 : 0), 8))}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {activeMegaMenu.columns.slice(0, Math.max(1, popupStyle.maxColumns)).map((group, index, arr) => (
                     <div
-                      key={group.heading}
-                      className={`min-h-[340px] border-r border-[#f0f1f4] px-8 py-7 ${index % 2 === 0 ? "bg-[#fbfbfc]" : "bg-white"} ${index === MEGA_MENU_HOME.length - 1 ? "border-r-0" : ""}`}
+                      key={group.id}
+                      className={`min-h-[340px] border-r border-[#f0f1f4] px-8 py-7 ${index === arr.length - 1 ? "border-r-0" : ""}`}
+                      style={{ background: popupStyle.cardBackgroundColor }}
                     >
-                      <p className="mb-3 text-[22px] font-semibold text-[#f2b400]">{group.heading}</p>
+                      <p className="mb-3 text-[22px] font-semibold" style={{ color: popupStyle.headingColor }}>{group.heading}</p>
+                      {group.imageUrl ? (
+                        <div className="mb-3 overflow-hidden rounded-lg border border-[#e8ebf0]">
+                          <img src={group.imageUrl} alt={group.imageAlt || group.heading} className="h-24 w-full object-cover" />
+                        </div>
+                      ) : null}
                       <ul className="space-y-2.5">
                         {group.links.map((item) => (
-                          <li key={item}>
+                          <li key={item.id}>
                             <Link
-                              href={`/search?q=${encodeURIComponent(item)}`}
-                              className="text-[15px] tracking-tight text-[#222a3f] hover:text-[#111827]"
+                              href={item.href}
+                              className="text-[15px] tracking-tight hover:text-[#111827]"
+                              style={{ color: popupStyle.textColor }}
                             >
-                              {item}
+                              {item.label}
+                              {item.badge ? (
+                                <span className="ml-1 rounded-full bg-[#ecf9e9] px-1.5 py-0.5 text-[10px] font-semibold text-[#3e8b41]">
+                                  {item.badge}
+                                </span>
+                              ) : null}
                             </Link>
                           </li>
                         ))}
                       </ul>
+                      {group.ctaLabel && group.ctaHref ? (
+                        <Link
+                          href={group.ctaHref}
+                          className="mt-4 inline-flex rounded-full border border-[#dbe4ea] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[#243447]"
+                        >
+                          {group.ctaLabel}
+                        </Link>
+                      ) : null}
                     </div>
                   ))}
+                  {popupStyle.showPromoCard ? (
+                    <div className="min-h-[340px] px-6 py-6">
+                      <div className="h-full rounded-xl border border-[#e4e5ea] bg-white p-3">
+                        {popupStyle.promoImageUrl ? (
+                          <img src={popupStyle.promoImageUrl} alt="Menu promo" className="h-40 w-full rounded-lg object-cover" />
+                        ) : (
+                          <div className="flex h-40 w-full items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-500">
+                            Promo Image
+                          </div>
+                        )}
+                        <p className="mt-3 text-base font-semibold text-[#111827]">{popupStyle.promoTitle || "Promo Title"}</p>
+                        <p className="mt-1 text-sm text-slate-600">{popupStyle.promoText || "Add promotional copy from Settings."}</p>
+                        {popupStyle.promoCtaLabel && popupStyle.promoCtaHref ? (
+                          <Link
+                            href={popupStyle.promoCtaHref}
+                            className="mt-3 inline-flex rounded-full bg-[#111827] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-white"
+                          >
+                            {popupStyle.promoCtaLabel}
+                          </Link>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -257,47 +428,132 @@ export function Navbar({ storeName, brandPrefix, logoUrl }: NavbarProps) {
       </div>
 
       {mobileMenuOpen ? (
-        <div className="fixed inset-0 z-[70] lg:hidden">
+        <div className="fixed inset-0 z-[70]">
           <button
             type="button"
             className="absolute inset-0 bg-black/35"
             aria-label="Close menu overlay"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <aside className="relative h-full w-[86%] max-w-[320px] bg-[#f5f5f6] shadow-xl">
+          <aside className="relative mx-auto mt-14 flex max-h-[calc(100vh-7rem)] w-[92%] max-w-[360px] flex-col overflow-hidden rounded-2xl bg-[#f5f5f6] shadow-[0_20px_50px_rgba(15,23,42,0.28)] lg:ml-0 lg:mt-0 lg:h-full lg:max-h-none lg:w-[86%] lg:max-w-[320px] lg:rounded-none lg:shadow-xl">
             <div className="flex items-center justify-between border-b border-[#e2e3e6] px-5 py-4">
-              <p className="text-sm uppercase tracking-[0.06em] text-[#7e8597]">Shop For</p>
+              <div className="flex items-center gap-2">
+                {activeColumnMenu ? (
+                  <button
+                    type="button"
+                    aria-label="Back to categories"
+                    onClick={() => setMobileColumnId(null)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d8dbe1] text-[#6a7282]"
+                  >
+                    <ChevronRight className="h-4 w-4 rotate-180" />
+                  </button>
+                ) : null}
+                {!activeColumnMenu && activeTopMenu ? (
+                  <button
+                    type="button"
+                    aria-label="Back to top menu"
+                    onClick={() => setMobileTopMenuId(null)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d8dbe1] text-[#6a7282]"
+                  >
+                    <ChevronRight className="h-4 w-4 rotate-180" />
+                  </button>
+                ) : null}
+                <p className="text-sm uppercase tracking-[0.06em] text-[#7e8597]">
+                  {activeColumnMenu?.label ?? activeTopMenu?.label ?? "Shop For"}
+                </p>
+              </div>
               <button type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>
                 <X className="h-5 w-5 text-[#6a7282]" />
               </button>
             </div>
 
-            <div className="px-4 pt-1">
-              {MOBILE_SHOP_LINKS.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="flex items-center justify-between border-b border-[#e2e3e6] px-2 py-4"
-                >
-                  <span className="text-[30px] font-semibold text-[#111827] md:text-lg">{item.label}</span>
-                  <ChevronRight className="h-5 w-5 text-[#9aa1af]" />
-                </Link>
-              ))}
+            <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1">
+              {!activeTopMenu ? (
+                mobileMenuTree.map((item) => (
+                  <div key={item.id} className="border-b border-[#e2e3e6]">
+                    {item.children.length ? (
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between px-2 py-4 text-left"
+                        onClick={() => {
+                          setMobileTopMenuId(item.id);
+                          setMobileColumnId(null);
+                        }}
+                      >
+                        <span className="text-2xl font-semibold text-[#111827] md:text-xl">{item.label}</span>
+                        <ChevronRight className="h-5 w-5 text-[#9aa1af]" />
+                      </button>
+                    ) : (
+                      <Link href={item.href ?? "/products"} className="flex items-center justify-between px-2 py-4">
+                        <span className="text-2xl font-semibold text-[#111827] md:text-xl">{item.label}</span>
+                        <ChevronRight className="h-5 w-5 text-[#9aa1af]" />
+                      </Link>
+                    )}
+                  </div>
+                ))
+              ) : null}
+
+              {activeTopMenu && !activeColumnMenu ? (
+                <>
+                  <Link
+                    href={activeTopMenu.href ?? "/products"}
+                    className="mb-2 mt-2 block rounded-md border border-[#d8dbe1] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#374151]"
+                  >
+                    View All {activeTopMenu.label}
+                  </Link>
+                  {activeTopMenu.children.map((column) => (
+                    <div key={column.id} className="border-b border-[#e2e3e6]">
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between px-2 py-3.5 text-left"
+                        onClick={() => setMobileColumnId(column.id)}
+                      >
+                        <span className="text-lg font-semibold text-[#111827]">{column.label}</span>
+                        <ChevronRight className="h-5 w-5 text-[#9aa1af]" />
+                      </button>
+                    </div>
+                  ))}
+                </>
+              ) : null}
+
+              {activeColumnMenu ? (
+                <>
+                  <Link
+                    href={activeColumnMenu.href ?? activeTopMenu?.href ?? "/products"}
+                    className="mb-2 mt-2 block rounded-md border border-[#d8dbe1] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#374151]"
+                  >
+                    View All {activeColumnMenu.label}
+                  </Link>
+                  {activeColumnMenu.children.map((entry) => (
+                    <Link
+                      key={entry.id}
+                      href={entry.href ?? activeColumnMenu.href ?? "/products"}
+                      className="block border-b border-[#e2e3e6] px-2 py-3 text-base text-[#27324d]"
+                    >
+                      {entry.label}
+                    </Link>
+                  ))}
+                </>
+              ) : null}
             </div>
 
-            <div className="space-y-1 px-6 py-5">
-              {MOBILE_MISC_LINKS.map((item) => (
-                <Link key={item.href} href={item.href} className="block py-2 text-[26px] text-[#27324d] md:text-lg">
-                  {item.label}
-                </Link>
-              ))}
-            </div>
+            {!activeTopMenu ? (
+              <>
+                <div className="space-y-1 px-6 py-5">
+                  {mobileMiscLinks.map((item) => (
+                    <Link key={item.id} href={item.href} className="block py-2 text-xl text-[#27324d] md:text-lg">
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
 
-            <div className="absolute bottom-3 left-0 right-0 text-center">
-              <Link href="/contact" className="text-[13px] uppercase tracking-[0.05em] text-[#8b92a4]">
-                Contact Us
-              </Link>
-            </div>
+                <div className="pb-3 text-center">
+                  <Link href="/contact" className="text-[13px] uppercase tracking-[0.05em] text-[#8b92a4]">
+                    Contact Us
+                  </Link>
+                </div>
+              </>
+            ) : null}
           </aside>
         </div>
       ) : null}

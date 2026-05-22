@@ -34,24 +34,27 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const settings = await getStoreSettings();
 
   return (
-    <html lang="en" className={`${manrope.variable} ${spaceGrotesk.variable} ${cormorant.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`light ${manrope.variable} ${spaceGrotesk.variable} ${cormorant.variable}`} suppressHydrationWarning>
       <body className="min-h-screen font-sans">
         <AppProviders>
-          <Script id="theme-init" strategy="beforeInteractive">
+          <Script id="force-light-mode" strategy="beforeInteractive">
             {`
               (() => {
                 try {
-                  const saved = localStorage.getItem("friendlydrop-theme");
-                  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-                  const resolved = saved === "dark" || saved === "light" ? saved : (prefersDark ? "dark" : "light");
-                  if (resolved === "dark") document.documentElement.classList.add("dark");
-                  else document.documentElement.classList.remove("dark");
+                  document.documentElement.classList.remove("dark");
+                  document.documentElement.classList.add("light");
+                  document.documentElement.setAttribute("data-theme", "light");
                 } catch (error) {}
               })();
             `}
           </Script>
           <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
-          <Navbar storeName={settings.storeName} brandPrefix={settings.brandPrefix} logoUrl={settings.logoUrl} />
+          <Navbar
+            storeName={settings.storeName}
+            brandPrefix={settings.brandPrefix}
+            logoUrl={settings.logoUrl}
+            menuEditor={settings.menuEditor}
+          />
           {children}
           <Footer
             storeName={settings.storeName}

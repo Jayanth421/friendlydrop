@@ -25,7 +25,7 @@ export type UserStatus = "active" | "suspended" | "blocked";
 
 export type CustomerSegment = "new" | "repeat" | "vip";
 
-export type ProductCategory = "photo-prints" | "stickers" | "personalized-gifts";
+export type ProductCategory = "photo-prints" | "stickers" | "personalized-gifts" | string;
 
 export type ProductStatus = "draft" | "published" | "archived";
 
@@ -105,10 +105,13 @@ export interface Product {
   id: string;
   name: string;
   slug: string;
+  subtitle?: string;
+  shortDescription?: string;
   description: string;
   price: number;
   discountPercent?: number;
   images: string[];
+  videoUrl?: string;
   category: ProductCategory;
   subcategory?: string;
   stock: number;
@@ -120,15 +123,101 @@ export interface Product {
   recommended?: boolean;
   popularity?: number;
   tags?: string[];
+  badges?: string[];
   rating?: number;
   reviewCount?: number;
   weightGrams?: number;
+  deliveryTime?: string;
+  shippingInfo?: string;
+  trustBadges?: string[];
+  benefits?: string[];
+  ingredients?: string[];
+  usageInstructions?: string[];
+  routineProductIds?: string[];
+  comboProductIds?: string[];
+  frequentlyBoughtTogetherIds?: string[];
   status?: ProductStatus;
   visibility?: ProductVisibility;
   seo?: SeoMeta;
   vendorId?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+export type ProductPageSectionId =
+  | "announcement_bar"
+  | "breadcrumbs"
+  | "product_tags"
+  | "ratings"
+  | "price"
+  | "product_gallery"
+  | "feature_highlights"
+  | "benefits"
+  | "ingredients"
+  | "usage_instructions"
+  | "product_routine"
+  | "related_products"
+  | "combo_products"
+  | "frequently_bought_together"
+  | "reviews"
+  | "faq"
+  | "delivery_information"
+  | "icons_features_row"
+  | "sticky_add_to_cart"
+  | "floating_buy_button"
+  | "mobile_bottom_navigation"
+  | "trust_badges"
+  | "coupon_section"
+  | "subscription_option"
+  | "recommended_products"
+  | "recently_viewed_products";
+
+export interface ProductPageSectionConfig {
+  id: ProductPageSectionId;
+  label: string;
+  description?: string;
+  enabled: boolean;
+  order: number;
+  content?: Record<string, unknown>;
+}
+
+export interface ProductPageBuilderGlobalConfig {
+  id: "default";
+  sections: ProductPageSectionConfig[];
+  reusableTemplateIds?: string[];
+  globalFlags?: {
+    autoGenerateProductPage?: boolean;
+    autoGenerateSeoMetadata?: boolean;
+    autoGenerateSlug?: boolean;
+    autoRelatedProducts?: boolean;
+    autoRecommendations?: boolean;
+    autoCategoryAssignment?: boolean;
+    autoInventorySync?: boolean;
+    autoMobileOptimization?: boolean;
+    autoSearchIndexing?: boolean;
+    autoSitemapUpdate?: boolean;
+  };
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+export interface ProductPageTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  sections: ProductPageSectionConfig[];
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+}
+
+export interface ProductPageBuilderOverride {
+  id: string;
+  productId: string;
+  templateId?: string;
+  sections?: ProductPageSectionConfig[];
+  updatedAt: string;
+  updatedBy?: string;
 }
 
 export interface CartItem {
@@ -708,12 +797,88 @@ export interface SocialShareLink {
   createdAt: string;
 }
 
+export interface StoreMenuLink {
+  id: string;
+  label: string;
+  href: string;
+  badge?: string;
+}
+
+export interface StoreMegaMenuEntry {
+  id: string;
+  label: string;
+  href: string;
+  badge?: string;
+}
+
+export interface StoreMegaMenuColumn {
+  id: string;
+  heading: string;
+  links: StoreMegaMenuEntry[];
+  imageUrl?: string;
+  imageAlt?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+}
+
+export interface StoreMegaMenuConfig {
+  id: string;
+  key: string;
+  title: string;
+  columns: StoreMegaMenuColumn[];
+  promoCard?: StoreMegaMenuPromoCard;
+}
+
+export interface StoreMegaMenuPromoCard {
+  enabled?: boolean;
+  imageUrl?: string;
+  title?: string;
+  text?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+}
+
+export interface StoreDesktopMenuItem {
+  id: string;
+  label: string;
+  href: string;
+  badge?: string;
+  showMegaMenu?: boolean;
+  megaMenuKey?: string;
+}
+
+export interface StoreMenuPopupStyle {
+  widthPx: number;
+  maxColumns: number;
+  borderRadiusPx: number;
+  backgroundColor: string;
+  textColor: string;
+  headingColor: string;
+  cardBackgroundColor: string;
+  animation: "none" | "fade" | "slide";
+  showPromoCard: boolean;
+  promoImageUrl?: string;
+  promoTitle?: string;
+  promoText?: string;
+  promoCtaLabel?: string;
+  promoCtaHref?: string;
+}
+
+export interface StoreMenuEditorConfig {
+  desktopLinks: StoreDesktopMenuItem[];
+  mobileShopLinks: StoreMenuLink[];
+  mobileMiscLinks: StoreMenuLink[];
+  megaMenus: StoreMegaMenuConfig[];
+  popupStyle: StoreMenuPopupStyle;
+}
+
 export interface StoreSettings {
   id: "default";
   storeName: string;
   brandPrefix?: string;
   brandTagline?: string;
   logoUrl?: string;
+  loginLeftImageUrl?: string;
   supportEmail: string;
   supportPhone: string;
   taxRate: number;
@@ -725,6 +890,7 @@ export interface StoreSettings {
   integrations: IntegrationControlConfig;
   operations: OperationsControlConfig;
   alerts: AlertControlConfig;
+  menuEditor: StoreMenuEditorConfig;
   updatedAt: string;
 }
 

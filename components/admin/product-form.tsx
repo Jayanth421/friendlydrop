@@ -11,9 +11,12 @@ import { firebaseStorage } from "@/lib/firebase/client";
 interface ProductFormValues {
   id?: string;
   name: string;
+  subtitle?: string;
+  shortDescription?: string;
   description: string;
   price: number;
   images: string[];
+  videoUrl?: string;
   category: string;
   subcategory?: string;
   stock: number;
@@ -21,6 +24,16 @@ interface ProductFormValues {
   brand?: string;
   discountPercent?: number;
   tags?: string[];
+  badges?: string[];
+  deliveryTime?: string;
+  shippingInfo?: string;
+  trustBadges?: string[];
+  benefits?: string[];
+  ingredients?: string[];
+  usageInstructions?: string[];
+  routineProductIds?: string[];
+  comboProductIds?: string[];
+  frequentlyBoughtTogetherIds?: string[];
   featured?: boolean;
   recommended?: boolean;
   popularity?: number;
@@ -39,9 +52,12 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
   const [form, setForm] = useState<ProductFormValues>(
     defaultValues ?? {
       name: "",
+      subtitle: "",
+      shortDescription: "",
       description: "",
       price: 499,
       images: [],
+      videoUrl: "",
       category: "photo-prints",
       subcategory: "",
       stock: 20,
@@ -49,6 +65,16 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
       brand: "",
       discountPercent: 0,
       tags: [],
+      badges: [],
+      deliveryTime: "",
+      shippingInfo: "",
+      trustBadges: [],
+      benefits: [],
+      ingredients: [],
+      usageInstructions: [],
+      routineProductIds: [],
+      comboProductIds: [],
+      frequentlyBoughtTogetherIds: [],
       featured: true,
       recommended: false,
       popularity: 80,
@@ -88,6 +114,8 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
     await uploadFile(event.dataTransfer.files[0]);
   };
 
+  const csvToList = (value?: string[]) => (value ?? []).map((item) => item.trim()).filter(Boolean);
+
   const save = async () => {
     setSaving(true);
 
@@ -110,8 +138,21 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
         price: Number(form.price),
         stock: Number(form.stock),
         discountPercent: Number(form.discountPercent ?? 0),
-        popularity: Number(form.popularity),
-        tags: (form.tags ?? []).filter(Boolean),
+        popularity: Number(form.popularity ?? 0),
+        tags: csvToList(form.tags),
+        badges: csvToList(form.badges),
+        trustBadges: csvToList(form.trustBadges),
+        benefits: csvToList(form.benefits),
+        ingredients: csvToList(form.ingredients),
+        usageInstructions: csvToList(form.usageInstructions),
+        routineProductIds: csvToList(form.routineProductIds),
+        comboProductIds: csvToList(form.comboProductIds),
+        frequentlyBoughtTogetherIds: csvToList(form.frequentlyBoughtTogetherIds),
+        videoUrl: form.videoUrl?.trim() || undefined,
+        subtitle: form.subtitle?.trim() || undefined,
+        shortDescription: form.shortDescription?.trim() || undefined,
+        deliveryTime: form.deliveryTime?.trim() || undefined,
+        shippingInfo: form.shippingInfo?.trim() || undefined,
         seo: normalizedSeo,
       }),
     });
@@ -129,6 +170,12 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
       <Input placeholder="Name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+      <Input placeholder="Subtitle" value={form.subtitle ?? ""} onChange={(event) => setForm({ ...form, subtitle: event.target.value })} />
+      <Input
+        placeholder="Short description"
+        value={form.shortDescription ?? ""}
+        onChange={(event) => setForm({ ...form, shortDescription: event.target.value })}
+      />
       <Textarea placeholder="Description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
 
       <div className="grid gap-2 sm:grid-cols-4">
@@ -148,6 +195,28 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
           value={form.discountPercent ?? 0}
           onChange={(event) => setForm({ ...form, discountPercent: Number(event.target.value) })}
         />
+        <Input
+          placeholder="Delivery time (24-48 hrs)"
+          value={form.deliveryTime ?? ""}
+          onChange={(event) => setForm({ ...form, deliveryTime: event.target.value })}
+        />
+        <Input
+          placeholder="Shipping info"
+          value={form.shippingInfo ?? ""}
+          onChange={(event) => setForm({ ...form, shippingInfo: event.target.value })}
+        />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input placeholder="Video URL" value={form.videoUrl ?? ""} onChange={(event) => setForm({ ...form, videoUrl: event.target.value })} />
+        <Input
+          placeholder="Trust badges (comma separated)"
+          value={(form.trustBadges ?? []).join(",")}
+          onChange={(event) => setForm({ ...form, trustBadges: event.target.value.split(",").map((item) => item.trim()) })}
+        />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-4">
         <label className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-3 text-sm">
           <input type="checkbox" checked={Boolean(form.featured)} onChange={(event) => setForm({ ...form, featured: event.target.checked })} />
           Featured
@@ -179,6 +248,46 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
         placeholder="Tags (comma separated)"
         value={(form.tags ?? []).join(",")}
         onChange={(event) => setForm({ ...form, tags: event.target.value.split(",").map((tag) => tag.trim()) })}
+      />
+      <Input
+        placeholder="Badges (comma separated)"
+        value={(form.badges ?? []).join(",")}
+        onChange={(event) => setForm({ ...form, badges: event.target.value.split(",").map((tag) => tag.trim()) })}
+      />
+      <Input
+        placeholder="Benefits (comma separated)"
+        value={(form.benefits ?? []).join(",")}
+        onChange={(event) => setForm({ ...form, benefits: event.target.value.split(",").map((tag) => tag.trim()) })}
+      />
+      <Input
+        placeholder="Ingredients (comma separated)"
+        value={(form.ingredients ?? []).join(",")}
+        onChange={(event) => setForm({ ...form, ingredients: event.target.value.split(",").map((tag) => tag.trim()) })}
+      />
+      <Input
+        placeholder="Usage instructions (comma separated)"
+        value={(form.usageInstructions ?? []).join(",")}
+        onChange={(event) => setForm({ ...form, usageInstructions: event.target.value.split(",").map((tag) => tag.trim()) })}
+      />
+      <Input
+        placeholder="Routine product IDs (comma separated)"
+        value={(form.routineProductIds ?? []).join(",")}
+        onChange={(event) => setForm({ ...form, routineProductIds: event.target.value.split(",").map((tag) => tag.trim()) })}
+      />
+      <Input
+        placeholder="Combo product IDs (comma separated)"
+        value={(form.comboProductIds ?? []).join(",")}
+        onChange={(event) => setForm({ ...form, comboProductIds: event.target.value.split(",").map((tag) => tag.trim()) })}
+      />
+      <Input
+        placeholder="Frequently bought together IDs (comma separated)"
+        value={(form.frequentlyBoughtTogetherIds ?? []).join(",")}
+        onChange={(event) =>
+          setForm({
+            ...form,
+            frequentlyBoughtTogetherIds: event.target.value.split(",").map((tag) => tag.trim()),
+          })
+        }
       />
 
       <div className="grid gap-2 sm:grid-cols-2">

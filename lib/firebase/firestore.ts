@@ -4,6 +4,10 @@ import { FALLBACK_COUPONS, FALLBACK_PRODUCTS } from "@/lib/mock-data";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { DEFAULT_STORE_SETTINGS, normalizeStoreSettings } from "@/lib/settings-engine";
 import {
+  createDefaultProductPageBuilderConfig,
+  normalizeProductPageSections,
+} from "@/lib/product-page-builder";
+import {
   ActivityLog,
   AuditLog,
   CartItem,
@@ -37,6 +41,10 @@ import {
   SeoTrafficInsight,
   SocialShareConfig,
   SocialShareLink,
+  ProductPageBuilderGlobalConfig,
+  ProductPageBuilderOverride,
+  ProductPageSectionConfig,
+  ProductPageTemplate,
 } from "@/types";
 
 function isFirestoreReady() {
@@ -260,6 +268,8 @@ const FALLBACK_TRANSACTIONS: Transaction[] = [
 ];
 
 const FALLBACK_SETTINGS: StoreSettings = DEFAULT_STORE_SETTINGS;
+const FALLBACK_PRODUCT_PAGE_BUILDER_GLOBAL: ProductPageBuilderGlobalConfig = createDefaultProductPageBuilderConfig();
+const FALLBACK_PRODUCT_PAGE_TEMPLATES: ProductPageTemplate[] = [];
 
 const FALLBACK_PLUGINS: PluginApp[] = [
   {
@@ -1492,6 +1502,24 @@ export async function getExpenses(): Promise<FinanceExpense[]> {
   return snapshot.docs.map((doc) => mapDoc<FinanceExpense>(doc));
 }
 
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedDeep(item)) as T;
+  }
+
+  if (value && typeof value === "object") {
+    const input = value as Record<string, unknown>;
+    const output: Record<string, unknown> = {};
+    for (const [key, raw] of Object.entries(input)) {
+      if (raw === undefined) continue;
+      output[key] = stripUndefinedDeep(raw);
+    }
+    return output as T;
+  }
+
+  return value;
+}
+
 export async function getStoreSettings(): Promise<StoreSettings> {
   if (!isFirestoreReady()) {
     return FALLBACK_SETTINGS;
@@ -1553,15 +1581,190 @@ export async function updateStoreSettings(updates: Partial<StoreSettings>) {
       ...current.alerts,
       ...(updates.alerts ?? {}),
     },
+    menuEditor: {
+      ...current.menuEditor,
+      ...(updates.menuEditor ?? {}),
+      desktopLinks: updates.menuEditor?.desktopLinks ?? current.menuEditor.desktopLinks,
+      mobileShopLinks: updates.menuEditor?.mobileShopLinks ?? current.menuEditor.mobileShopLinks,
+      mobileMiscLinks: updates.menuEditor?.mobileMiscLinks ?? current.menuEditor.mobileMiscLinks,
+      megaMenus: updates.menuEditor?.megaMenus ?? current.menuEditor.megaMenus,
+      popupStyle: {
+        ...current.menuEditor.popupStyle,
+        ...(updates.menuEditor?.popupStyle ?? {}),
+      },
+    },
   });
 
   await getAdminDb().collection("settings").doc("default").set(
-    {
+    stripUndefinedDeep({
       ...merged,
       updatedAt: new Date().toISOString(),
-    },
+    }),
     { merge: true },
   );
+}
+
+export async function getProductPageBuilderGlobalConfig(): Promise<ProductPageBuilderGlobalConfig> {
+  if (!isFirestoreReady()) {
+    return FALLBACK_PRODUCT_PAGE_BUILDER_GLOBAL;
+  }
+
+  const snapshot = await getAdminDb().collection("productPageBuilderGlobal").doc("default").get();
+
+  if (!snapshot.exists) {
+    return FALLBACK_PRODUCT_PAGE_BUILDER_GLOBAL;
+  }
+
+  const data = snapshot.data() as Partial<ProductPageBuilderGlobalConfig> | undefined;
+  const normalizedSections = normalizeProductPageSections(data?.sections);
+
+  return {
+    id: "default",
+    sections: normalizedSections,
+    reusableTemplateIds: data?.reusableTemplateIds ?? [],
+    globalFlags: {
+      ...FALLBACK_PRODUCT_PAGE_BUILDER_GLOBAL.globalFlags,
+      ...(data?.globalFlags ?? {}),
+    },
+    updatedAt: data?.updatedAt ?? FALLBACK_PRODUCT_PAGE_BUILDER_GLOBAL.updatedAt,
+    updatedBy: data?.updatedBy,
+  };
+}
+
+export async function upsertProductPageBuilderGlobalConfig(
+  updates: Partial<ProductPageBuilderGlobalConfig>,
+  actorId?: string,
+) {
+  ensureFirestoreReady();
+  const current = await getProductPageBuilderGlobalConfig();
+  const sections = normalizeProductPageSections(updates.sections ?? current.sections);
+
+  const merged: ProductPageBuilderGlobalConfig = {
+    ...current,
+    ...updates,
+    id: "default",
+    sections,
+    reusableTemplateIds: updates.reusableTemplateIds ?? current.reusableTemplateIds ?? [],
+    globalFlags: {
+      ...current.globalFlags,
+      ...(updates.globalFlags ?? {}),
+    },
+    updatedAt: new Date().toISOString(),
+    updatedBy: actorId ?? updates.updatedBy ?? current.updatedBy,
+  };
+
+  await getAdminDb().collection("productPageBuilderGlobal").doc("default").set(merged, { merge: true });
+  return merged;
+}
+
+export async function getProductPageBuilderTemplates(): Promise<ProductPageTemplate[]> {
+  if (!isFirestoreReady()) {
+    return FALLBACK_PRODUCT_PAGE_TEMPLATES;
+  }
+
+  const snapshot = await getAdminDb()
+    .collection("productPageBuilderTemplates")
+    .orderBy("updatedAt", "desc")
+    .limit(200)
+    .get();
+
+  return snapshot.docs.map((doc) => {
+    const mapped = mapDoc<ProductPageTemplate>(doc);
+    return {
+      ...mapped,
+      sections: normalizeProductPageSections(mapped.sections),
+    };
+  });
+}
+
+export async function saveProductPageBuilderTemplate(input: {
+  id?: string;
+  name: string;
+  description?: string;
+  sections: ProductPageSectionConfig[];
+  actorId?: string;
+}) {
+  ensureFirestoreReady();
+
+  const id = input.id ?? nanoid(12);
+  const now = new Date().toISOString();
+  const payload: ProductPageTemplate = {
+    id,
+    name: input.name.trim(),
+    description: input.description?.trim(),
+    sections: normalizeProductPageSections(input.sections),
+    createdAt: now,
+    updatedAt: now,
+    createdBy: input.actorId,
+  };
+
+  if (input.id) {
+    const existing = await getAdminDb().collection("productPageBuilderTemplates").doc(input.id).get();
+    const existingData = existing.exists ? (existing.data() as Partial<ProductPageTemplate>) : null;
+    payload.createdAt = existingData?.createdAt ?? now;
+    payload.createdBy = existingData?.createdBy ?? input.actorId;
+  }
+
+  await getAdminDb().collection("productPageBuilderTemplates").doc(id).set(payload, { merge: true });
+  return payload;
+}
+
+export async function getProductPageBuilderOverride(productId: string): Promise<ProductPageBuilderOverride | null> {
+  if (!isFirestoreReady()) {
+    return null;
+  }
+
+  const snapshot = await getAdminDb().collection("productPageBuilderOverrides").doc(productId).get();
+  if (!snapshot.exists) {
+    return null;
+  }
+
+  const mapped = snapshot.data() as ProductPageBuilderOverride;
+  return {
+    ...mapped,
+    id: productId,
+    productId,
+    sections: normalizeProductPageSections(mapped.sections),
+  };
+}
+
+export async function upsertProductPageBuilderOverride(input: {
+  productId: string;
+  sections?: ProductPageSectionConfig[];
+  templateId?: string;
+  actorId?: string;
+}) {
+  ensureFirestoreReady();
+  const now = new Date().toISOString();
+
+  const payload: ProductPageBuilderOverride = {
+    id: input.productId,
+    productId: input.productId,
+    sections: input.sections ? normalizeProductPageSections(input.sections) : undefined,
+    templateId: input.templateId,
+    updatedAt: now,
+    updatedBy: input.actorId,
+  };
+
+  await getAdminDb().collection("productPageBuilderOverrides").doc(input.productId).set(payload, { merge: true });
+  return payload;
+}
+
+export async function resolveProductPageSectionsForProduct(productId: string): Promise<ProductPageSectionConfig[]> {
+  const [globalConfig, override, templates] = await Promise.all([
+    getProductPageBuilderGlobalConfig(),
+    getProductPageBuilderOverride(productId),
+    getProductPageBuilderTemplates(),
+  ]);
+
+  const templateSections = override?.templateId
+    ? templates.find((template) => template.id === override.templateId)?.sections
+    : undefined;
+
+  const baseSections = templateSections ?? globalConfig.sections;
+  const merged = normalizeProductPageSections(override?.sections ?? baseSections);
+
+  return merged;
 }
 
 export async function getActivityLogs(limit = 200): Promise<ActivityLog[]> {

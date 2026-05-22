@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   BarChart3,
   Package,
@@ -45,6 +45,7 @@ const items = [
   { href: "/admin/customers", label: "Customers", icon: Users, permission: "users:manage" as const },
   { href: "/admin/vendors", label: "Vendors", icon: Store, permission: "vendors:manage" as const },
   { href: "/admin/products", label: "Products", icon: Package, permission: "products:manage" as const },
+  { href: "/admin/product-page-builder", label: "Product Page Builder", icon: PenTool, permission: "products:manage" as const },
   { href: "/admin/categories", label: "Categories", icon: Layers, permission: "catalog:manage" as const },
   { href: "/admin/marketing", label: "Marketing", icon: Megaphone, permission: "marketing:manage" as const },
   { href: "/admin/ads", label: "Meta Ads", icon: Megaphone, permission: "marketing:manage" as const },
@@ -60,6 +61,7 @@ const items = [
   { href: "/admin/builder", label: "Visual Builder", icon: PenTool, permission: "settings:manage" as const },
   { href: "/admin/mobile", label: "Mobile Control", icon: Smartphone, permission: "settings:manage" as const },
   { href: "/admin/cms", label: "CMS Pages", icon: FileText, permission: "settings:manage" as const },
+  { href: "/admin/settings?tab=sitebuilder", label: "Site Builder", icon: PenTool, permission: "settings:manage" as const },
   { href: "/admin/settings", label: "Settings", icon: Settings, permission: "settings:manage" as const },
   { href: "/admin/uploads", label: "Uploads", icon: Image, permission: "orders:manage" as const },
   { href: "/admin/coupons", label: "Coupons", icon: Ticket, permission: "coupons:manage" as const },
@@ -78,6 +80,7 @@ const items = [
 
 export function AdminSidebar({ role }: { role: UserRole }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   return (
     <aside className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm md:sticky md:top-24 md:max-h-[calc(100vh-7rem)] md:overflow-y-auto">
@@ -87,7 +90,11 @@ export function AdminSidebar({ role }: { role: UserRole }) {
         {items
           .filter((item) => hasPermission(role, item.permission))
           .map((item) => {
-            const active = pathname === item.href;
+            const [targetPath, query] = item.href.split("?");
+            const tab = query ? new URLSearchParams(query).get("tab") : null;
+            const active = tab
+              ? pathname === targetPath && searchParams.get("tab") === tab
+              : pathname === item.href;
             const Icon = item.icon;
             return (
               <Link

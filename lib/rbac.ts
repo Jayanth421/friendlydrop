@@ -25,6 +25,7 @@ const ALL_PERMISSIONS: AdminPermission[] = [
 const STAFF_PERMISSIONS: AdminPermission[] = [
   "dashboard:view",
   "analytics:view",
+  "products:manage",
   "orders:manage",
   "users:manage",
   "reviews:manage",

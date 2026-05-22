@@ -48,11 +48,14 @@ export const productVariantSchema = z.object({
 
 export const productSchema = z.object({
   name: z.string().min(2),
+  subtitle: z.string().max(180).optional(),
+  shortDescription: z.string().max(320).optional(),
   description: z.string().min(10),
   price: z.number().min(1),
   discountPercent: z.number().min(0).max(90).optional(),
   images: z.array(z.string().url()).min(1),
-  category: z.enum(["photo-prints", "stickers", "personalized-gifts"]),
+  videoUrl: z.string().url().optional(),
+  category: z.string().min(1),
   subcategory: z.string().optional(),
   stock: z.number().int().min(0),
   sku: z.string().optional(),
@@ -61,9 +64,19 @@ export const productSchema = z.object({
   attributes: z.record(z.string()).optional(),
   variants: z.array(productVariantSchema).optional(),
   tags: z.array(z.string()).optional(),
+  badges: z.array(z.string()).optional(),
   featured: z.boolean().optional(),
   recommended: z.boolean().optional(),
   popularity: z.number().int().optional(),
+  deliveryTime: z.string().max(140).optional(),
+  shippingInfo: z.string().max(320).optional(),
+  trustBadges: z.array(z.string()).optional(),
+  benefits: z.array(z.string()).optional(),
+  ingredients: z.array(z.string()).optional(),
+  usageInstructions: z.array(z.string()).optional(),
+  routineProductIds: z.array(z.string()).optional(),
+  comboProductIds: z.array(z.string()).optional(),
+  frequentlyBoughtTogetherIds: z.array(z.string()).optional(),
   status: z.enum(["draft", "published", "archived"]).optional(),
   visibility: z.enum(["public", "private"]).optional(),
   seo: z
@@ -322,7 +335,7 @@ const integrationProviderSchema = z.object({
   healthStatus: z.enum(["active", "failed", "disabled", "unknown"]),
   lastCheckedAt: z.string().datetime().optional(),
   lastError: z.string().optional(),
-  endpoint: z.string().url().optional(),
+  endpoint: z.string().url().optional().or(z.literal("")),
 });
 
 const webhookSchema = z.object({
@@ -336,11 +349,79 @@ const webhookSchema = z.object({
   lastTriggeredAt: z.string().datetime().optional(),
 });
 
+const storeMenuLinkSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  href: z.string().min(1),
+  badge: z.string().optional(),
+});
+
+const storeMegaMenuEntrySchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  href: z.string().min(1),
+  badge: z.string().optional(),
+});
+
+const storeMegaMenuColumnSchema = z.object({
+  id: z.string().min(1),
+  heading: z.string().min(1),
+  links: z.array(storeMegaMenuEntrySchema),
+  imageUrl: z.string().optional().or(z.literal("")),
+  imageAlt: z.string().optional(),
+  ctaLabel: z.string().optional(),
+  ctaHref: z.string().optional().or(z.literal("")),
+});
+
+const storeMegaMenuPromoCardSchema = z.object({
+  enabled: z.boolean().optional(),
+  imageUrl: z.string().optional().or(z.literal("")),
+  title: z.string().optional(),
+  text: z.string().optional(),
+  ctaLabel: z.string().optional(),
+  ctaHref: z.string().optional().or(z.literal("")),
+});
+
+const storeMegaMenuConfigSchema = z.object({
+  id: z.string().min(1),
+  key: z.string().min(1),
+  title: z.string().min(1),
+  columns: z.array(storeMegaMenuColumnSchema),
+  promoCard: storeMegaMenuPromoCardSchema.optional(),
+});
+
+const storeDesktopMenuItemSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  href: z.string().min(1),
+  badge: z.string().optional(),
+  showMegaMenu: z.boolean().optional(),
+  megaMenuKey: z.string().optional(),
+});
+
+const storeMenuPopupStyleSchema = z.object({
+  widthPx: z.number().int().min(480).max(2600),
+  maxColumns: z.number().int().min(1).max(8),
+  borderRadiusPx: z.number().int().min(0).max(40),
+  backgroundColor: z.string().min(3),
+  textColor: z.string().min(3),
+  headingColor: z.string().min(3),
+  cardBackgroundColor: z.string().min(3),
+  animation: z.enum(["none", "fade", "slide"]),
+  showPromoCard: z.boolean(),
+  promoImageUrl: z.string().optional().or(z.literal("")),
+  promoTitle: z.string().optional(),
+  promoText: z.string().optional(),
+  promoCtaLabel: z.string().optional(),
+  promoCtaHref: z.string().optional().or(z.literal("")),
+});
+
 export const storeSettingsSchema = z.object({
   storeName: z.string().min(2),
   brandPrefix: z.string().max(30).optional(),
   brandTagline: z.string().max(180).optional(),
   logoUrl: z.string().url().optional().or(z.literal("")),
+  loginLeftImageUrl: z.string().url().optional().or(z.literal("")),
   supportEmail: z.string().email(),
   supportPhone: z.string().min(8),
   taxRate: z.number().min(0).max(100),
@@ -384,6 +465,13 @@ export const storeSettingsSchema = z.object({
     deliveryDelayThreshold: z.number().min(1).max(100),
     apiLatencyThresholdMs: z.number().min(100).max(60000),
     refundRateThreshold: z.number().min(1).max(100),
+  }),
+  menuEditor: z.object({
+    desktopLinks: z.array(storeDesktopMenuItemSchema),
+    mobileShopLinks: z.array(storeMenuLinkSchema),
+    mobileMiscLinks: z.array(storeMenuLinkSchema),
+    megaMenus: z.array(storeMegaMenuConfigSchema),
+    popupStyle: storeMenuPopupStyleSchema,
   }),
 });
 

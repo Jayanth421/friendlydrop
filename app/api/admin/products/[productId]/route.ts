@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api";
 import { createSlug } from "@/lib/utils";
 import { productSchema } from "@/lib/validators";
-import { deleteProduct, getProductById, updateProduct } from "@/lib/firebase/firestore";
+import { deleteProduct, getProductById, updateProduct, upsertProductPageBuilderOverride } from "@/lib/firebase/firestore";
 import { logAdminActivity, logAdminAudit } from "@/lib/admin/logs";
+import { buildAutoProductSyncDraft } from "@/lib/product-page-builder";
 
 export const runtime = "nodejs";
 
@@ -12,10 +13,26 @@ export async function PATCH(request: NextRequest, { params }: { params: { produc
     const admin = await requireApiPermission(request, "products:manage");
     const before = await getProductById(params.productId);
     const parsed = productSchema.partial().parse(await request.json());
+    const autoDraft = buildAutoProductSyncDraft({
+      ...before,
+      ...parsed,
+    });
 
     await updateProduct(params.productId, {
       ...parsed,
       ...(parsed.name ? { slug: createSlug(parsed.name) } : {}),
+      subtitle: parsed.subtitle ?? autoDraft.subtitle,
+      shortDescription: parsed.shortDescription ?? autoDraft.shortDescription,
+      tags: parsed.tags ?? autoDraft.tags,
+      seo: {
+        ...(autoDraft.seo ?? {}),
+        ...(parsed.seo ?? {}),
+      },
+    });
+
+    await upsertProductPageBuilderOverride({
+      productId: params.productId,
+      actorId: admin.uid,
     });
 
     const after = await getProductById(params.productId);

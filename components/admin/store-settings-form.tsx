@@ -3,6 +3,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
 import { StoreSettings } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -75,8 +76,14 @@ function NumberInput({
 }
 
 export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
+  const searchParams = useSearchParams();
   const [form, setForm] = useState<StoreSettings>(settings);
   const [saving, setSaving] = useState(false);
+  const initialTab = useMemo(() => {
+    const requested = searchParams.get("tab");
+    const allowed = new Set(["delivery", "payments", "integrations", "sitebuilder", "controls"]);
+    return requested && allowed.has(requested) ? requested : "delivery";
+  }, [searchParams]);
 
   const integrationSummary = useMemo(() => {
     const providers = form.integrations.providers;
@@ -100,8 +107,10 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
     setSaving(false);
 
     if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      toast.error(payload.error ?? "Could not save settings");
+      const payload = await response.json().catch(() => null);
+      const apiMessage = payload && typeof payload === "object" && "error" in payload ? String(payload.error) : "";
+      const fallback = `Could not save settings (HTTP ${response.status})`;
+      toast.error(apiMessage || fallback);
       return;
     }
 
@@ -120,11 +129,12 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
         </CardHeader>
       </Card>
 
-      <Tabs defaultValue="delivery">
+      <Tabs defaultValue={initialTab} key={initialTab}>
         <TabsList>
           <TabsTrigger value="delivery">Delivery</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
+          <TabsTrigger value="sitebuilder">Site Builder</TabsTrigger>
           <TabsTrigger value="controls">Controls</TabsTrigger>
         </TabsList>
 
@@ -463,6 +473,342 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
           </Card>
         </TabsContent>
 
+        <TabsContent value="sitebuilder" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Store Identity</CardTitle>
+              <CardDescription>Global store identity fields for header/footer branding.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <input value={form.storeName} onChange={(event) => setForm({ ...form, storeName: event.target.value })} placeholder="Store name" className="h-9 rounded border border-slate-200 px-2 text-sm" />
+              <input value={form.brandPrefix ?? ""} onChange={(event) => setForm({ ...form, brandPrefix: event.target.value || undefined })} placeholder="Brand prefix (e.g. Maison)" className="h-9 rounded border border-slate-200 px-2 text-sm" />
+              <input value={form.logoUrl ?? ""} onChange={(event) => setForm({ ...form, logoUrl: event.target.value || undefined })} placeholder="Logo URL (https://...)" className="h-9 rounded border border-slate-200 px-2 text-sm" />
+              <input value={form.loginLeftImageUrl ?? ""} onChange={(event) => setForm({ ...form, loginLeftImageUrl: event.target.value || undefined })} placeholder="Login left image URL (https://...)" className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" />
+              <input value={form.brandTagline ?? ""} onChange={(event) => setForm({ ...form, brandTagline: event.target.value || undefined })} placeholder="Brand tagline" className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" />
+              <input value={form.themeColor} onChange={(event) => setForm({ ...form, themeColor: event.target.value })} placeholder="Theme color" className="h-9 rounded border border-slate-200 px-2 text-sm" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Menu</CardTitle>
+              <CardDescription>Path: Settings -&gt; Site Builder -&gt; Menu. Edit categories, popup links, images, and style.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Desktop Top Links</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        menuEditor: {
+                          ...form.menuEditor,
+                          desktopLinks: [
+                            ...form.menuEditor.desktopLinks,
+                            {
+                              id: makeId("desktop-link"),
+                              label: "NEW",
+                              href: "/products",
+                              showMegaMenu: false,
+                            },
+                          ],
+                        },
+                      })
+                    }
+                  >
+                    Add Link
+                  </Button>
+                </div>
+                {form.menuEditor.desktopLinks.map((item, index) => (
+                  <div key={item.id} className="grid gap-2 rounded border border-slate-200 p-2 md:grid-cols-6">
+                    <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={item.label} placeholder="Label" onChange={(event) => {
+                      const desktopLinks = [...form.menuEditor.desktopLinks];
+                      desktopLinks[index] = { ...item, label: event.target.value };
+                      setForm({ ...form, menuEditor: { ...form.menuEditor, desktopLinks } });
+                    }} />
+                    <input className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" value={item.href} placeholder="/products?section=..." onChange={(event) => {
+                      const desktopLinks = [...form.menuEditor.desktopLinks];
+                      desktopLinks[index] = { ...item, href: event.target.value };
+                      setForm({ ...form, menuEditor: { ...form.menuEditor, desktopLinks } });
+                    }} />
+                    <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={item.badge ?? ""} placeholder="Badge" onChange={(event) => {
+                      const desktopLinks = [...form.menuEditor.desktopLinks];
+                      desktopLinks[index] = { ...item, badge: event.target.value || undefined };
+                      setForm({ ...form, menuEditor: { ...form.menuEditor, desktopLinks } });
+                    }} />
+                    <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={item.megaMenuKey ?? ""} placeholder="Mega key (home)" onChange={(event) => {
+                      const desktopLinks = [...form.menuEditor.desktopLinks];
+                      desktopLinks[index] = { ...item, megaMenuKey: event.target.value || undefined };
+                      setForm({ ...form, menuEditor: { ...form.menuEditor, desktopLinks } });
+                    }} />
+                    <div className="flex items-center justify-between text-xs">
+                      <Toggle checked={Boolean(item.showMegaMenu)} label="popup" onChange={(value) => {
+                        const desktopLinks = [...form.menuEditor.desktopLinks];
+                        desktopLinks[index] = { ...item, showMegaMenu: value };
+                        setForm({ ...form, menuEditor: { ...form.menuEditor, desktopLinks } });
+                      }} />
+                      <button
+                        type="button"
+                        className="text-rose-600"
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            menuEditor: {
+                              ...form.menuEditor,
+                              desktopLinks: form.menuEditor.desktopLinks.filter((row) => row.id !== item.id),
+                            },
+                          })
+                        }
+                      >
+                        remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Mega Popup Menus</p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        menuEditor: {
+                          ...form.menuEditor,
+                          megaMenus: [
+                            ...form.menuEditor.megaMenus,
+                            {
+                              id: makeId("mega"),
+                              key: "new-menu",
+                              title: "New Menu",
+                              columns: [
+                                {
+                                  id: makeId("col"),
+                                  heading: "Column",
+                                  links: [{ id: makeId("menu-link"), label: "Link 1", href: "/products" }],
+                                },
+                              ],
+                            },
+                          ],
+                        },
+                      })
+                    }
+                  >
+                    Add Mega Menu
+                  </Button>
+                </div>
+
+                {form.menuEditor.megaMenus.map((menu, menuIndex) => (
+                  <div key={menu.id} className="space-y-2 rounded border border-slate-200 p-3">
+                    <div className="grid gap-2 md:grid-cols-4">
+                      <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={menu.title} placeholder="Title" onChange={(event) => {
+                        const megaMenus = [...form.menuEditor.megaMenus];
+                        megaMenus[menuIndex] = { ...menu, title: event.target.value };
+                        setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                      }} />
+                      <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={menu.key} placeholder="Key (home)" onChange={(event) => {
+                        const megaMenus = [...form.menuEditor.megaMenus];
+                        megaMenus[menuIndex] = { ...menu, key: event.target.value };
+                        setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                      }} />
+                      <div className="md:col-span-2 flex items-center justify-end">
+                        <button
+                          type="button"
+                          className="text-xs text-rose-600"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              menuEditor: { ...form.menuEditor, megaMenus: form.menuEditor.megaMenus.filter((item) => item.id !== menu.id) },
+                            })
+                          }
+                        >
+                          remove mega menu
+                        </button>
+                      </div>
+                    </div>
+
+                    {menu.columns.map((column, columnIndex) => (
+                      <div key={column.id} className="space-y-2 rounded border border-slate-200 p-2">
+                        <div className="grid gap-2 md:grid-cols-4">
+                          <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={column.heading} placeholder="Column heading" onChange={(event) => {
+                            const megaMenus = [...form.menuEditor.megaMenus];
+                            const columns = [...menu.columns];
+                            columns[columnIndex] = { ...column, heading: event.target.value };
+                            megaMenus[menuIndex] = { ...menu, columns };
+                            setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                          }} />
+                          <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={column.imageUrl ?? ""} placeholder="Category image URL" onChange={(event) => {
+                            const megaMenus = [...form.menuEditor.megaMenus];
+                            const columns = [...menu.columns];
+                            columns[columnIndex] = { ...column, imageUrl: event.target.value || undefined };
+                            megaMenus[menuIndex] = { ...menu, columns };
+                            setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                          }} />
+                          <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={column.ctaLabel ?? ""} placeholder="CTA label" onChange={(event) => {
+                            const megaMenus = [...form.menuEditor.megaMenus];
+                            const columns = [...menu.columns];
+                            columns[columnIndex] = { ...column, ctaLabel: event.target.value || undefined };
+                            megaMenus[menuIndex] = { ...menu, columns };
+                            setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                          }} />
+                          <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={column.ctaHref ?? ""} placeholder="CTA link" onChange={(event) => {
+                            const megaMenus = [...form.menuEditor.megaMenus];
+                            const columns = [...menu.columns];
+                            columns[columnIndex] = { ...column, ctaHref: event.target.value || undefined };
+                            megaMenus[menuIndex] = { ...menu, columns };
+                            setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                          }} />
+                        </div>
+
+                        <div className="space-y-2 rounded border border-slate-200 p-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Column Links</p>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={() => {
+                                const megaMenus = [...form.menuEditor.megaMenus];
+                                const columns = [...menu.columns];
+                                columns[columnIndex] = {
+                                  ...column,
+                                  links: [...column.links, { id: makeId("menu-link"), label: "New Link", href: "/products" }],
+                                };
+                                megaMenus[menuIndex] = { ...menu, columns };
+                                setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                              }}
+                            >
+                              Add Link
+                            </Button>
+                          </div>
+                          {column.links.map((menuLink, linkIndex) => (
+                            <div key={menuLink.id} className="grid gap-2 md:grid-cols-5">
+                              <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={menuLink.label} placeholder="Link label" onChange={(event) => {
+                                const megaMenus = [...form.menuEditor.megaMenus];
+                                const columns = [...menu.columns];
+                                const links = [...column.links];
+                                links[linkIndex] = { ...menuLink, label: event.target.value };
+                                columns[columnIndex] = { ...column, links };
+                                megaMenus[menuIndex] = { ...menu, columns };
+                                setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                              }} />
+                              <input className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" value={menuLink.href} placeholder="/products?category=..." onChange={(event) => {
+                                const megaMenus = [...form.menuEditor.megaMenus];
+                                const columns = [...menu.columns];
+                                const links = [...column.links];
+                                links[linkIndex] = { ...menuLink, href: event.target.value };
+                                columns[columnIndex] = { ...column, links };
+                                megaMenus[menuIndex] = { ...menu, columns };
+                                setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                              }} />
+                              <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={menuLink.badge ?? ""} placeholder="Badge" onChange={(event) => {
+                                const megaMenus = [...form.menuEditor.megaMenus];
+                                const columns = [...menu.columns];
+                                const links = [...column.links];
+                                links[linkIndex] = { ...menuLink, badge: event.target.value || undefined };
+                                columns[columnIndex] = { ...column, links };
+                                megaMenus[menuIndex] = { ...menu, columns };
+                                setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                              }} />
+                              <button
+                                type="button"
+                                className="text-xs text-rose-600"
+                                onClick={() => {
+                                  const megaMenus = [...form.menuEditor.megaMenus];
+                                  const columns = [...menu.columns];
+                                  columns[columnIndex] = {
+                                    ...column,
+                                    links: column.links.filter((row) => row.id !== menuLink.id),
+                                  };
+                                  megaMenus[menuIndex] = { ...menu, columns };
+                                  setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                                }}
+                              >
+                                remove link
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex items-start justify-end">
+                          <button
+                            type="button"
+                            className="text-xs text-rose-600"
+                            onClick={() => {
+                              const megaMenus = [...form.menuEditor.megaMenus];
+                              const columns = menu.columns.filter((row) => row.id !== column.id);
+                              megaMenus[menuIndex] = { ...menu, columns };
+                              setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                            }}
+                          >
+                            remove column
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        const megaMenus = [...form.menuEditor.megaMenus];
+                        megaMenus[menuIndex] = {
+                          ...menu,
+                          columns: [...menu.columns, { id: makeId("col"), heading: "New Column", links: [] }],
+                        };
+                        setForm({ ...form, menuEditor: { ...form.menuEditor, megaMenus } });
+                      }}
+                    >
+                      Add Column
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2 rounded border border-slate-200 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Popup Style / Animation / Promo Card</p>
+                <div className="grid gap-2 md:grid-cols-3">
+                  <div>
+                    <p className="mb-1 text-xs text-slate-500">Popup width px</p>
+                    <NumberInput value={form.menuEditor.popupStyle.widthPx} min={480} max={2600} onChange={(value) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, widthPx: value } } })} />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs text-slate-500">Max columns</p>
+                    <NumberInput value={form.menuEditor.popupStyle.maxColumns} min={1} max={8} onChange={(value) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, maxColumns: value } } })} />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs text-slate-500">Border radius px</p>
+                    <NumberInput value={form.menuEditor.popupStyle.borderRadiusPx} min={0} max={40} onChange={(value) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, borderRadiusPx: value } } })} />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs text-slate-500">Animation</p>
+                    <select className="h-9 w-full rounded border border-slate-200 px-2 text-sm" value={form.menuEditor.popupStyle.animation} onChange={(event) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, animation: event.target.value as "none" | "fade" | "slide" } } })}>
+                      <option value="none">none</option>
+                      <option value="fade">fade</option>
+                      <option value="slide">slide</option>
+                    </select>
+                  </div>
+                  <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={form.menuEditor.popupStyle.backgroundColor} placeholder="Background color" onChange={(event) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, backgroundColor: event.target.value } } })} />
+                  <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={form.menuEditor.popupStyle.textColor} placeholder="Text color" onChange={(event) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, textColor: event.target.value } } })} />
+                  <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={form.menuEditor.popupStyle.headingColor} placeholder="Heading color" onChange={(event) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, headingColor: event.target.value } } })} />
+                  <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={form.menuEditor.popupStyle.cardBackgroundColor} placeholder="Column card background" onChange={(event) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, cardBackgroundColor: event.target.value } } })} />
+                  <Toggle checked={form.menuEditor.popupStyle.showPromoCard} label="Show promo image card" onChange={(value) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, showPromoCard: value } } })} />
+                  <input className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" value={form.menuEditor.popupStyle.promoImageUrl ?? ""} placeholder="Promo image URL" onChange={(event) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, promoImageUrl: event.target.value } } })} />
+                  <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={form.menuEditor.popupStyle.promoTitle ?? ""} placeholder="Promo title" onChange={(event) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, promoTitle: event.target.value } } })} />
+                  <input className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" value={form.menuEditor.popupStyle.promoText ?? ""} placeholder="Promo text" onChange={(event) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, promoText: event.target.value } } })} />
+                  <input className="h-9 rounded border border-slate-200 px-2 text-sm" value={form.menuEditor.popupStyle.promoCtaLabel ?? ""} placeholder="Promo CTA label" onChange={(event) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, promoCtaLabel: event.target.value || undefined } } })} />
+                  <input className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" value={form.menuEditor.popupStyle.promoCtaHref ?? ""} placeholder="Promo CTA link" onChange={(event) => setForm({ ...form, menuEditor: { ...form.menuEditor, popupStyle: { ...form.menuEditor.popupStyle, promoCtaHref: event.target.value || undefined } } })} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="controls" className="space-y-4">
           <Card>
             <CardHeader><CardTitle>Operational Toggles</CardTitle></CardHeader>
@@ -481,6 +827,7 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
               <input value={form.storeName} onChange={(event) => setForm({ ...form, storeName: event.target.value })} placeholder="Store name" className="h-9 rounded border border-slate-200 px-2 text-sm" />
               <input value={form.brandPrefix ?? ""} onChange={(event) => setForm({ ...form, brandPrefix: event.target.value || undefined })} placeholder="Brand prefix (e.g. Maison)" className="h-9 rounded border border-slate-200 px-2 text-sm" />
               <input value={form.logoUrl ?? ""} onChange={(event) => setForm({ ...form, logoUrl: event.target.value || undefined })} placeholder="Logo URL (https://...)" className="h-9 rounded border border-slate-200 px-2 text-sm" />
+              <input value={form.loginLeftImageUrl ?? ""} onChange={(event) => setForm({ ...form, loginLeftImageUrl: event.target.value || undefined })} placeholder="Login left image URL (https://...)" className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" />
               <input value={form.supportEmail} onChange={(event) => setForm({ ...form, supportEmail: event.target.value })} placeholder="Support email" className="h-9 rounded border border-slate-200 px-2 text-sm" />
               <input value={form.supportPhone} onChange={(event) => setForm({ ...form, supportPhone: event.target.value })} placeholder="Support phone" className="h-9 rounded border border-slate-200 px-2 text-sm" />
               <input value={form.brandTagline ?? ""} onChange={(event) => setForm({ ...form, brandTagline: event.target.value || undefined })} placeholder="Brand tagline" className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" />

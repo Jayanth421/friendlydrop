@@ -51,8 +51,8 @@ export default async function AccountPage() {
       <AccountMenuItem href="/wishlist" title="Collections & Wishlist" subtitle={`All your curated product collections${wishlistIds.length ? ` • ${wishlistIds.length} saved` : ""}`} icon={Grid2X2} />
 
       <div className="mt-3 h-2 bg-[#ececef]" />
-      <AccountMenuItem href="/account?panel=credit" title="Myntra Credit" subtitle="Manage all your refunds & gift cards" icon={Gift} />
-      <AccountMenuItem href="/account?panel=mycash" title="MynCash" subtitle={`Earn MynCash as you shop and use them in checkout • ${formatCurrency(walletBalance)}`} icon={BadgeIndianRupee} />
+      <AccountMenuItem href="/account?panel=credit" title="FD Credit" subtitle="Manage all your refunds & gift cards" icon={Gift} />
+      <AccountMenuItem href="/account?panel=mycash" title="FD Cash" subtitle={`Earn FDCash as you shop and use them in checkout • ${formatCurrency(walletBalance)}`} icon={BadgeIndianRupee} />
       <AccountMenuItem href="/account?panel=saved-cards" title="Saved Cards" subtitle={`Save your cards for faster checkout${cardsCount ? ` • ${cardsCount} used` : ""}`} icon={CreditCard} />
       <AccountMenuItem href="/account?panel=saved-upi" title="Saved UPI" subtitle={`View your saved UPI${upiCount ? ` • ${upiCount} recent` : ""}`} icon={ShieldCheck} />
       <AccountMenuItem href="/account?panel=wallets-bnpl" title="Wallets/BNPL" subtitle="View your saved Wallets and BNPL" icon={Wallet} />

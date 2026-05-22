@@ -1,4 +1,15 @@
-import { CustomerSegment, DeliveryPricingRule, DeliverySpeed, DeliveryZone, PaymentProvider, StoreSettings } from "@/types";
+import {
+  CustomerSegment,
+  DeliveryPricingRule,
+  DeliverySpeed,
+  DeliveryZone,
+  PaymentProvider,
+  StoreMegaMenuColumn,
+  StoreMegaMenuConfig,
+  StoreMegaMenuEntry,
+  StoreMegaMenuPromoCard,
+  StoreSettings,
+} from "@/types";
 
 export interface DeliveryQuoteInput {
   subtotal: number;
@@ -50,6 +61,111 @@ function normalizeCsv(values?: string[]) {
   return (values ?? [])
     .map((value) => value.trim())
     .filter(Boolean);
+}
+
+function normalizeMenuEntry(entry: unknown, index: number): StoreMegaMenuEntry | null {
+  if (typeof entry === "string") {
+    const label = entry.trim();
+    if (!label) return null;
+    return {
+      id: `menu-entry-${index + 1}`,
+      label,
+      href: `/search?q=${encodeURIComponent(label)}`,
+    };
+  }
+
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const raw = entry as Partial<StoreMegaMenuEntry>;
+  const label = raw.label?.trim();
+  const href = raw.href?.trim();
+  if (!label || !href) return null;
+  const badge = raw.badge?.trim();
+
+  return {
+    id: raw.id?.trim() || `menu-entry-${index + 1}`,
+    label,
+    href,
+    ...(badge ? { badge } : {}),
+  };
+}
+
+function normalizeMenuColumn(column: unknown, index: number): StoreMegaMenuColumn {
+  if (!column || typeof column !== "object") {
+    return {
+      id: `menu-col-${index + 1}`,
+      heading: "Category",
+      links: [],
+    };
+  }
+
+  const raw = column as Partial<StoreMegaMenuColumn> & { links?: unknown[] };
+  const normalizedLinks = Array.isArray(raw.links)
+    ? raw.links
+        .map((entry, entryIndex) => normalizeMenuEntry(entry, entryIndex))
+        .filter((entry): entry is StoreMegaMenuEntry => Boolean(entry))
+    : [];
+  const imageUrl = raw.imageUrl?.trim();
+  const imageAlt = raw.imageAlt?.trim();
+  const ctaLabel = raw.ctaLabel?.trim();
+  const ctaHref = raw.ctaHref?.trim();
+
+  return {
+    id: raw.id?.trim() || `menu-col-${index + 1}`,
+    heading: raw.heading?.trim() || "Category",
+    links: normalizedLinks,
+    ...(imageUrl ? { imageUrl } : {}),
+    ...(imageAlt ? { imageAlt } : {}),
+    ...(ctaLabel ? { ctaLabel } : {}),
+    ...(ctaHref ? { ctaHref } : {}),
+  };
+}
+
+function normalizeMenuPromoCard(promoCard: unknown): StoreMegaMenuPromoCard | undefined {
+  if (!promoCard || typeof promoCard !== "object") {
+    return undefined;
+  }
+
+  const raw = promoCard as StoreMegaMenuPromoCard;
+  const imageUrl = raw.imageUrl?.trim();
+  const title = raw.title?.trim();
+  const text = raw.text?.trim();
+  const ctaLabel = raw.ctaLabel?.trim();
+  const ctaHref = raw.ctaHref?.trim();
+  const enabled = typeof raw.enabled === "boolean" ? raw.enabled : undefined;
+
+  const normalized: StoreMegaMenuPromoCard = {
+    ...(typeof enabled === "boolean" ? { enabled } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
+    ...(title ? { title } : {}),
+    ...(text ? { text } : {}),
+    ...(ctaLabel ? { ctaLabel } : {}),
+    ...(ctaHref ? { ctaHref } : {}),
+  };
+
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
+function normalizeMegaMenus(menus: unknown[] | undefined, fallback: StoreMegaMenuConfig[]): StoreMegaMenuConfig[] {
+  if (!Array.isArray(menus)) return fallback;
+
+  return menus.map((menu, index) => {
+    const raw = (menu ?? {}) as Partial<StoreMegaMenuConfig> & { columns?: unknown[]; promoCard?: unknown };
+    const normalizedColumns = Array.isArray(raw.columns)
+      ? raw.columns.map((column, columnIndex) => normalizeMenuColumn(column, columnIndex))
+      : [];
+    const normalizedPromoCard = normalizeMenuPromoCard(raw.promoCard);
+
+    return {
+      id: raw.id?.trim() || `mega-${index + 1}`,
+      key: raw.key?.trim() || `mega-${index + 1}`,
+      title: raw.title?.trim() || "Menu",
+      columns: normalizedColumns,
+      ...(normalizedPromoCard ? { promoCard: normalizedPromoCard } : {}),
+    };
+  });
 }
 
 function matchesZone(zone: DeliveryZone, input: DeliveryQuoteInput) {
@@ -402,6 +518,7 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   brandPrefix: "Maison",
   brandTagline: "Luxury-ready fashion commerce with AI styling.",
   logoUrl: "",
+  loginLeftImageUrl: "",
   supportEmail: "help@friendlydrop.in",
   supportPhone: "+91 98765 43210",
   taxRate: 18,
@@ -601,6 +718,109 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
     apiLatencyThresholdMs: 1500,
     refundRateThreshold: 12,
   },
+  menuEditor: {
+    desktopLinks: [
+      { id: "menu-men", label: "MEN", href: "/products?section=men" },
+      { id: "menu-women", label: "WOMEN", href: "/products?section=women" },
+      { id: "menu-kids", label: "KIDS", href: "/products?section=kids" },
+      { id: "menu-home", label: "HOME", href: "/products?section=home", showMegaMenu: true, megaMenuKey: "home" },
+      { id: "menu-beauty", label: "BEAUTY", href: "/products?section=beauty" },
+      { id: "menu-genz", label: "GENZ", href: "/products?section=genz" },
+      { id: "menu-studio", label: "STUDIO", href: "/products?section=studio", badge: "NEW" },
+    ],
+    mobileShopLinks: [
+      { id: "m-men", label: "Men", href: "/products?section=men" },
+      { id: "m-women", label: "Women", href: "/products?section=women" },
+      { id: "m-kids", label: "Kids", href: "/products?section=kids" },
+      { id: "m-home", label: "Home", href: "/products?section=home" },
+      { id: "m-beauty", label: "Beauty", href: "/products?section=beauty" },
+      { id: "m-genz", label: "Genz", href: "/products?section=genz" },
+    ],
+    mobileMiscLinks: [
+      { id: "mm-orders", label: "Orders", href: "/orders" },
+      { id: "mm-wishlist", label: "Wishlist", href: "/wishlist" },
+      { id: "mm-credit", label: "Gift Cards", href: "/account?panel=credit" },
+      { id: "mm-contact", label: "Contact Us", href: "/contact" },
+      { id: "mm-about", label: "Brand Story", href: "/about-brand" },
+    ],
+    megaMenus: [
+      {
+        id: "mega-home",
+        key: "home",
+        title: "Home",
+        columns: [
+          {
+            id: "home-col-1",
+            heading: "Bed Linen & Furnishing",
+            links: [
+              { id: "home-col-1-link-1", label: "Bed Runners", href: "/products?category=bed-runners" },
+              { id: "home-col-1-link-2", label: "Mattress Protectors", href: "/products?category=mattress-protectors" },
+              { id: "home-col-1-link-3", label: "Bedsheets", href: "/products?category=bedsheets" },
+              { id: "home-col-1-link-4", label: "Bedding Sets", href: "/products?category=bedding-sets" },
+            ],
+            ctaLabel: "View All",
+            ctaHref: "/products?section=home",
+          },
+          {
+            id: "home-col-2",
+            heading: "Bath",
+            links: [
+              { id: "home-col-2-link-1", label: "Bath Towels", href: "/products?category=bath-towels" },
+              { id: "home-col-2-link-2", label: "Hand & Face Towels", href: "/products?category=hand-face-towels" },
+              { id: "home-col-2-link-3", label: "Bath Rugs", href: "/products?category=bath-rugs" },
+              { id: "home-col-2-link-4", label: "Bath Robes", href: "/products?category=bath-robes" },
+            ],
+          },
+          {
+            id: "home-col-3",
+            heading: "Home Decor",
+            links: [
+              { id: "home-col-3-link-1", label: "Plants & Planters", href: "/products?category=plants-planters" },
+              { id: "home-col-3-link-2", label: "Aromas & Candles", href: "/products?category=aromas-candles" },
+              { id: "home-col-3-link-3", label: "Clocks", href: "/products?category=clocks" },
+              { id: "home-col-3-link-4", label: "Mirrors", href: "/products?category=mirrors" },
+            ],
+          },
+          {
+            id: "home-col-4",
+            heading: "Furniture",
+            links: [
+              { id: "home-col-4-link-1", label: "Home Gift Sets", href: "/products?category=home-gift-sets" },
+              { id: "home-col-4-link-2", label: "Kitchen & Table", href: "/products?category=kitchen-table" },
+              { id: "home-col-4-link-3", label: "Table Runners", href: "/products?category=table-runners" },
+              { id: "home-col-4-link-4", label: "Dinnerware & Serveware", href: "/products?category=dinnerware-serveware" },
+            ],
+          },
+          {
+            id: "home-col-5",
+            heading: "Storage",
+            links: [
+              { id: "home-col-5-link-1", label: "Bins", href: "/products?category=bins" },
+              { id: "home-col-5-link-2", label: "Hangers", href: "/products?category=hangers" },
+              { id: "home-col-5-link-3", label: "Organisers", href: "/products?category=organisers" },
+              { id: "home-col-5-link-4", label: "Hooks & Holders", href: "/products?category=hooks-holders" },
+            ],
+          },
+        ],
+      },
+    ],
+    popupStyle: {
+      widthPx: 1500,
+      maxColumns: 5,
+      borderRadiusPx: 16,
+      backgroundColor: "#ffffff",
+      textColor: "#222a3f",
+      headingColor: "#16a34a",
+      cardBackgroundColor: "#fbfbfc",
+      animation: "fade",
+      showPromoCard: false,
+      promoImageUrl: "",
+      promoTitle: "Season Edit",
+      promoCtaLabel: "Shop Edit",
+      promoCtaHref: "/products",
+      promoText: "Add campaign visuals here from Settings -> Site Builder -> Menu.",
+    },
+  },
   updatedAt: nowIso(),
 };
 
@@ -608,6 +828,7 @@ export function normalizeStoreSettings(input?: Partial<StoreSettings>): StoreSet
   return {
     ...DEFAULT_STORE_SETTINGS,
     ...(input ?? {}),
+    loginLeftImageUrl: input?.loginLeftImageUrl?.trim() ?? DEFAULT_STORE_SETTINGS.loginLeftImageUrl,
     delivery: {
       ...DEFAULT_STORE_SETTINGS.delivery,
       ...(input?.delivery ?? {}),
@@ -645,7 +866,22 @@ export function normalizeStoreSettings(input?: Partial<StoreSettings>): StoreSet
       ...DEFAULT_STORE_SETTINGS.alerts,
       ...(input?.alerts ?? {}),
     },
+    menuEditor: {
+      ...DEFAULT_STORE_SETTINGS.menuEditor,
+      ...(input?.menuEditor ?? {}),
+      desktopLinks: input?.menuEditor?.desktopLinks ?? DEFAULT_STORE_SETTINGS.menuEditor.desktopLinks,
+      mobileShopLinks: input?.menuEditor?.mobileShopLinks ?? DEFAULT_STORE_SETTINGS.menuEditor.mobileShopLinks,
+      mobileMiscLinks: input?.menuEditor?.mobileMiscLinks ?? DEFAULT_STORE_SETTINGS.menuEditor.mobileMiscLinks,
+      megaMenus: normalizeMegaMenus(input?.menuEditor?.megaMenus as unknown[] | undefined, DEFAULT_STORE_SETTINGS.menuEditor.megaMenus),
+      popupStyle: {
+        ...DEFAULT_STORE_SETTINGS.menuEditor.popupStyle,
+        ...(input?.menuEditor?.popupStyle ?? {}),
+      },
+    },
     id: "default",
     updatedAt: input?.updatedAt ?? DEFAULT_STORE_SETTINGS.updatedAt,
   };
 }
+
+
+

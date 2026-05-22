@@ -8,7 +8,7 @@
   --bg-2: #f5f4f4;
   --fg: #262626;
   --muted: #737373;
-  --accent: #b3ef00;
+  --accent: #22c55e;
   --glass-border: rgba(0, 0, 0, 0.08);
   --glass-bg: rgba(255, 255, 255, 0.85);
 }
@@ -19,7 +19,7 @@
   --bg-2: #1a1a1a;
   --fg: #f3f3f3;
   --muted: #b8b8b8;
-  --accent: #b3ef00;
+  --accent: #22c55e;
   --glass-border: rgba(255, 255, 255, 0.16);
   --glass-bg: rgba(20, 20, 20, 0.7);
 }
@@ -41,7 +41,7 @@
   }
 
   ::selection {
-    background: rgba(179, 239, 0, 0.45);
+    background: rgba(34, 197, 94, 0.35);
     color: #262626;
   }
 }

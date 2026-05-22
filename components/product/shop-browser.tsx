@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Filter, Heart, Search, ShoppingBag, SlidersHorizontal } from "lucide-react";
 import { Product } from "@/types";
 import { ProductGrid } from "@/components/product/product-grid";
@@ -90,15 +91,29 @@ function buildQuery(filters: ShopFilters) {
   return params;
 }
 
+function formatCategoryLabel(category?: string) {
+  if (!category?.trim()) {
+    return "All Products";
+  }
+
+  return category
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export function ShopBrowser({
+  logoUrl,
   initialProducts,
   initialFacets,
   initialFilters,
 }: {
+  logoUrl?: string;
   initialProducts: Product[];
   initialFacets: ShopFacets;
   initialFilters: ShopFilters;
 }) {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [facets, setFacets] = useState<ShopFacets>(initialFacets);
   const [filters, setFilters] = useState<ShopFilters>(initialFilters);
@@ -151,9 +166,9 @@ export function ShopBrowser({
     [filters.sort],
   );
   const listingTitle = useMemo(() => {
-    const source = filters.category || "Girl";
-    return `${source.replaceAll("-", " ")} Tshirts`;
+    return formatCategoryLabel(filters.category);
   }, [filters.category]);
+  const selectedCategoryPath = useMemo(() => `/products${filters.category ? `?category=${encodeURIComponent(filters.category)}` : ""}`, [filters.category]);
 
   const toggleBrand = (brand: string) => {
     setFilters((current) => {
@@ -221,29 +236,47 @@ export function ShopBrowser({
     { key: "price", label: "Price" },
     { key: "brand", label: "Brand" },
     { key: "discount", label: "Discount Range" },
-    { key: "category", label: "Tshirts" },
+    { key: "category", label: "Category" },
     { key: "rating", label: "Rating" },
     { key: "availability", label: "Stock" },
   ];
 
   return (
     <>
-      <section className="bg-[#f5f5f6] lg:hidden">
-        <header className="sticky top-0 z-30 border-b border-[#e5e6ea] bg-white">
-          <div className="flex h-[54px] items-center justify-between px-3">
+      <section className="bg-[#daff3a] lg:hidden">
+        <header className="sticky top-0 z-30 border-b border-[#11121c] bg-white">
+          <div className="flex h-[50px] items-center justify-between px-3">
             <div className="flex items-center gap-2">
-              <button type="button" className="inline-flex h-8 w-8 items-center justify-center text-[#282c3f]">
+              <button
+                type="button"
+                aria-label="Go back"
+                className="inline-flex h-8 w-8 items-center justify-center text-[#11121c]"
+                onClick={() => {
+                  if (window.history.length > 1) {
+                    router.back();
+                    return;
+                  }
+
+                  router.push("/products");
+                }}
+              >
                 <ArrowLeft className="h-5 w-5" />
               </button>
-              <div className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-[#ff3f6c] via-[#f26a10] to-[#f7d438] text-sm font-bold text-white">
-                F
-              </div>
+              {logoUrl ? (
+                <span
+                  className="h-7 w-7 rounded-full border border-[#11121c] bg-contain bg-center bg-no-repeat"
+                  style={{ backgroundImage: `url(${logoUrl})` }}
+                  aria-hidden="true"
+                />
+              ) : (
+                <span className="inline-flex h-7 w-7 rounded-full border border-[#11121c] bg-white" aria-hidden="true" />
+              )}
               <div>
-                <p className="text-base font-semibold leading-none text-[#282c3f]">{listingTitle}</p>
-                <p className="text-xs text-[#6f7383]">{mobileCountLabel}</p>
+                <p className="text-base font-semibold leading-none text-[#11121c]">{listingTitle}</p>
+                <p className="max-w-[210px] truncate text-xs text-[#11121c]">{mobileCountLabel} | {selectedCategoryPath}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 text-[#282c3f]">
+            <div className="flex items-center gap-3 text-[#11121c]">
               <button type="button" className="inline-flex h-8 w-8 items-center justify-center">
                 <Search className="h-5 w-5" />
               </button>
@@ -257,26 +290,26 @@ export function ShopBrowser({
           </div>
         </header>
 
-        <div className="bg-[#b96cae] py-3 text-center text-white">
+        <div className="bg-[#daff3a] py-3 text-center text-[#11121c]">
           <p className="text-lg font-semibold uppercase">UPTO 200 OFF</p>
-          <p className="text-base font-semibold uppercase text-[#f9d9f4]">SAVE</p>
+          <p className="text-base font-semibold uppercase text-[#000000]">SAVE</p>
         </div>
 
         <div className="pb-[72px]">
           {products.length ? (
             <ProductGrid products={products} variant="listing" />
           ) : (
-            <div className="mx-3 mt-4 border border-dashed border-[#c4c4c4] bg-white px-4 py-10 text-center text-sm text-[#6f7383]">
+            <div className="mx-3 mt-4 border border-dashed border-[#11121c] bg-white px-4 py-10 text-center text-sm text-[#11121c]">
               No products match these filters.
             </div>
           )}
         </div>
 
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#dadce3] bg-white">
-          <div className="grid grid-cols-2 divide-x divide-[#e8e9ef]">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#11121c] bg-white">
+          <div className="grid grid-cols-2 divide-x divide-[#11121c]">
             <button
               type="button"
-              className="flex h-[58px] items-center justify-center gap-2 text-sm font-semibold tracking-[0.04em] text-[#3e4152]"
+              className="flex h-[58px] items-center justify-center gap-2 text-sm font-semibold tracking-[0.04em] text-[#11121c]"
               onClick={() => setMobileSortOpen(true)}
             >
               <SlidersHorizontal className="h-4 w-4" />
@@ -284,7 +317,7 @@ export function ShopBrowser({
             </button>
             <button
               type="button"
-              className="flex h-[58px] items-center justify-center gap-2 text-sm font-semibold tracking-[0.04em] text-[#3e4152]"
+              className="flex h-[58px] items-center justify-center gap-2 text-sm font-semibold tracking-[0.04em] text-[#11121c]"
               onClick={openMobileFilter}
             >
               <Filter className="h-4 w-4" />
@@ -295,17 +328,17 @@ export function ShopBrowser({
       </section>
 
       <section className="mx-auto hidden w-full max-w-[1400px] gap-8 px-4 pb-12 pt-6 lg:grid lg:grid-cols-[290px_1fr] lg:px-10 lg:pt-10">
-        <aside className="h-fit space-y-6 border border-[#dddbdc] bg-white p-5">
-          <div className="border-b border-[#ecebeb] pb-5">
-            <p className="text-xs uppercase tracking-[0.12em] text-[#737373]">Trend picks</p>
-            <p className="mt-2 text-3xl text-[#262626]">Super Sale</p>
-            <p className="mt-2 text-sm uppercase tracking-[0.08em] text-[#737373]">Up to 50% off with instant coupons.</p>
+        <aside className="h-fit space-y-6 border border-[#11121c] bg-white p-5">
+          <div className="border-b border-[#11121c] pb-5">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#11121c]">Trend picks</p>
+            <p className="mt-2 text-3xl text-[#000000]">Super Sale</p>
+            <p className="mt-2 text-sm uppercase tracking-[0.08em] text-[#11121c]">Up to 50% off with instant coupons.</p>
           </div>
 
           <div>
-            <p className="text-xs uppercase tracking-[0.1em] text-[#737373]">Search</p>
+            <p className="text-xs uppercase tracking-[0.1em] text-[#11121c]">Search</p>
             <input
-              className="mt-2 h-11 w-full border border-[#dddbdc] bg-white px-3 text-sm text-[#262626] outline-none focus:border-[#262626]"
+              className="mt-2 h-11 w-full border border-[#11121c] bg-white px-3 text-sm text-[#000000] outline-none focus:border-[#000000]"
               value={filters.search ?? ""}
               onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
               placeholder="Explore fashion"
@@ -313,15 +346,15 @@ export function ShopBrowser({
           </div>
 
           <div>
-            <p className="text-xs uppercase tracking-[0.1em] text-[#737373]">Category</p>
+            <p className="text-xs uppercase tracking-[0.1em] text-[#11121c]">Category</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setFilters((current) => ({ ...current, category: "" }))}
                 className={`border px-2.5 py-1.5 text-[11px] uppercase tracking-[0.08em] ${
                   filters.category === ""
-                    ? "border-[#262626] bg-[#262626] text-white"
-                    : "border-[#dddbdc] text-[#737373]"
+                    ? "border-[#000000] bg-[#000000] text-white"
+                    : "border-[#11121c] text-[#11121c]"
                 }`}
               >
                 All
@@ -333,8 +366,8 @@ export function ShopBrowser({
                   onClick={() => setFilters((current) => ({ ...current, category }))}
                   className={`border px-2.5 py-1.5 text-[11px] uppercase tracking-[0.08em] ${
                     filters.category === category
-                      ? "border-[#262626] bg-[#262626] text-white"
-                      : "border-[#dddbdc] text-[#737373]"
+                      ? "border-[#000000] bg-[#000000] text-white"
+                      : "border-[#11121c] text-[#11121c]"
                   }`}
                 >
                   {category.replaceAll("-", " ")}
@@ -344,9 +377,9 @@ export function ShopBrowser({
           </div>
 
           <div>
-            <p className="text-xs uppercase tracking-[0.1em] text-[#737373]">Price Range</p>
+            <p className="text-xs uppercase tracking-[0.1em] text-[#11121c]">Price Range</p>
             <div className="mt-3 space-y-2">
-              <label className="block text-xs uppercase tracking-[0.08em] text-[#737373]">
+              <label className="block text-xs uppercase tracking-[0.08em] text-[#11121c]">
                 Min: Rs. {filters.minPrice ?? facets.minPrice}
                 <input
                   type="range"
@@ -361,7 +394,7 @@ export function ShopBrowser({
                       maxPrice: Math.max(current.maxPrice ?? facets.maxPrice, nextMin),
                     }));
                   }}
-                  className="mt-1 w-full accent-[#74f941]"
+                  className="mt-1 w-full accent-[#daff3a]"
                 />
               </label>
               <label className="block text-xs text-slate-600">
@@ -379,21 +412,21 @@ export function ShopBrowser({
                       minPrice: Math.min(current.minPrice ?? facets.minPrice, nextMax),
                     }));
                   }}
-                  className="mt-1 w-full accent-[#262626]"
+                  className="mt-1 w-full accent-[#daff3a]"
                 />
               </label>
             </div>
           </div>
 
           <div>
-            <p className="text-xs uppercase tracking-[0.1em] text-[#737373]">Brand</p>
-            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto border border-[#ecebeb] p-2">
+            <p className="text-xs uppercase tracking-[0.1em] text-[#11121c]">Brand</p>
+            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto border border-[#11121c] p-2">
               {facets.brands.length ? (
                 facets.brands.map((brand) => (
-                  <label key={brand} className="flex cursor-pointer items-center gap-2 text-xs uppercase tracking-[0.06em] text-[#262626]">
+                  <label key={brand} className="flex cursor-pointer items-center gap-2 text-xs uppercase tracking-[0.06em] text-[#000000]">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 border-[#bbb] accent-[#262626]"
+                      className="h-4 w-4 border-[#11121c] accent-[#daff3a]"
                       checked={filters.brands.includes(brand)}
                       onChange={() => toggleBrand(brand)}
                     />
@@ -401,15 +434,15 @@ export function ShopBrowser({
                   </label>
                 ))
               ) : (
-                <p className="text-xs uppercase tracking-[0.08em] text-[#737373]">No brands available</p>
+                <p className="text-xs uppercase tracking-[0.08em] text-[#11121c]">No brands available</p>
               )}
             </div>
           </div>
 
           <div>
-            <p className="text-xs uppercase tracking-[0.1em] text-[#737373]">Rating</p>
+            <p className="text-xs uppercase tracking-[0.1em] text-[#11121c]">Rating</p>
             <select
-              className="mt-2 h-11 w-full border border-[#dddbdc] px-3 text-sm text-[#262626] outline-none focus:border-[#262626]"
+              className="mt-2 h-11 w-full border border-[#11121c] px-3 text-sm text-[#000000] outline-none focus:border-[#000000]"
               value={filters.minRating ?? 0}
               onChange={(event) =>
                 setFilters((current) => ({
@@ -426,7 +459,7 @@ export function ShopBrowser({
           </div>
 
           <button
-            className="h-11 w-full bg-[#262626] text-xs uppercase tracking-[0.12em] text-white hover:bg-black"
+            className="h-11 w-full bg-[#000000] text-xs uppercase tracking-[0.12em] text-white hover:bg-black"
             onClick={resetAllFilters}
           >
             Reset Filters
@@ -434,17 +467,17 @@ export function ShopBrowser({
         </aside>
 
         <div className="space-y-4">
-          <div className="border border-[#dddbdc] bg-white p-4">
+          <div className="border border-[#11121c] bg-white p-4">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <h1 className="text-3xl text-[#262626] md:text-4xl">Shop All Products</h1>
-                <p className="mt-1 text-xs uppercase tracking-[0.1em] text-[#737373]">
+                <h1 className="text-3xl text-[#000000] md:text-4xl">Shop All Products</h1>
+                <p className="mt-1 text-xs uppercase tracking-[0.1em] text-[#11121c]">
                   {loading ? "Updating products..." : productCountLabel}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select
-                  className="h-10 border border-[#dddbdc] px-3 text-xs uppercase tracking-[0.08em] text-[#262626] outline-none focus:border-[#262626]"
+                  className="h-10 border border-[#11121c] px-3 text-xs uppercase tracking-[0.08em] text-[#000000] outline-none focus:border-[#000000]"
                   value={filters.availability}
                   onChange={(event) =>
                     setFilters((current) => ({
@@ -458,7 +491,7 @@ export function ShopBrowser({
                   <option value="out-of-stock">Out of stock</option>
                 </select>
                 <select
-                  className="h-10 border border-[#dddbdc] px-3 text-xs uppercase tracking-[0.08em] text-[#262626] outline-none focus:border-[#262626]"
+                  className="h-10 border border-[#11121c] px-3 text-xs uppercase tracking-[0.08em] text-[#000000] outline-none focus:border-[#000000]"
                   value={filters.sort}
                   onChange={(event) =>
                     setFilters((current) => ({
@@ -479,7 +512,7 @@ export function ShopBrowser({
           {products.length ? (
             <ProductGrid products={products} variant="listing" />
           ) : (
-            <div className="border border-dashed border-[#c4c4c4] bg-white p-8 text-center text-sm uppercase tracking-[0.08em] text-[#737373]">
+            <div className="border border-dashed border-[#11121c] bg-white p-8 text-center text-sm uppercase tracking-[0.08em] text-[#11121c]">
               No products match these filters. Try adjusting category, price, or search.
             </div>
           )}
@@ -492,46 +525,46 @@ export function ShopBrowser({
             className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-white pb-4"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="border-b border-[#eceef3] px-5 py-4">
-              <p className="text-base font-semibold tracking-[0.04em] text-[#3e4152]">SORT BY</p>
+            <div className="border-b border-[#11121c] px-5 py-4">
+              <p className="text-base font-semibold tracking-[0.04em] text-[#11121c]">SORT BY</p>
             </div>
             <div className="px-5 pt-3">
               {SORT_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   type="button"
-                  className="flex w-full items-center justify-between border-b border-[#f1f2f5] py-4 text-left text-base text-[#3e4152]"
+                  className="flex w-full items-center justify-between border-b border-[#11121c] py-4 text-left text-base text-[#11121c]"
                   onClick={() => {
                     setFilters((current) => ({ ...current, sort: option.value }));
                     setMobileSortOpen(false);
                   }}
                 >
                   <span>{option.label}</span>
-                  {filters.sort === option.value ? <Check className="h-4 w-4 text-[#ff3f6c]" /> : null}
+                  {filters.sort === option.value ? <Check className="h-4 w-4 text-[#daff3a]" /> : null}
                 </button>
               ))}
-              <p className="pt-3 text-center text-xs text-[#7e8190]">Current: {activeSortLabel}</p>
+              <p className="pt-3 text-center text-xs text-[#11121c]">Current: {activeSortLabel}</p>
             </div>
           </div>
         </div>
       ) : null}
 
       {mobileFilterOpen ? (
-        <div className="fixed inset-0 z-50 bg-white lg:hidden">
-          <div className="flex h-[52px] items-center border-b border-[#ebedf2] px-4">
-            <p className="text-lg font-semibold text-[#2d3043]">FILTERS</p>
+        <div className="fixed inset-0 z-50 flex h-[100svh] max-h-[100dvh] flex-col bg-white lg:hidden">
+          <div className="flex h-[50px] items-center border-b border-[#11121c] px-4">
+            <p className="text-lg font-semibold text-[#11121c]">FILTERS</p>
           </div>
 
-          <div className="grid h-[calc(100vh-108px)] grid-cols-[132px_1fr]">
-            <div className="overflow-y-auto border-r border-[#ebedf2] bg-[#f3f4f7]">
+          <div className="grid min-h-0 flex-1 grid-cols-[132px_1fr]">
+            <div className="overflow-y-auto border-r border-[#11121c] bg-[#daff3a]">
               {mobileFilterSections.map((section) => (
                 <button
                   key={section.key}
                   type="button"
-                  className={`flex h-[48px] w-full items-center border-b border-[#eceef3] px-3 text-left text-sm ${
+                  className={`flex h-[48px] w-full items-center border-b border-[#11121c] px-3 text-left text-sm ${
                     activeMobileFilterSection === section.key
-                      ? "bg-[#8d909f] font-semibold text-white"
-                      : "text-[#3f4458]"
+                      ? "bg-[#11121c] font-semibold text-white"
+                      : "text-[#11121c]"
                   }`}
                   onClick={() => setActiveMobileFilterSection(section.key)}
                 >
@@ -543,16 +576,16 @@ export function ShopBrowser({
             <div className="overflow-y-auto bg-white px-4 py-3">
               {activeMobileFilterSection === "gender" ? (
                 <div className="space-y-5">
-                  <button type="button" className="flex w-full items-center justify-between text-left text-base text-[#2f3347]">
+                  <button type="button" className="flex w-full items-center justify-between text-left text-base text-[#11121c]">
                     <span>Boys</span>
-                    <span className="text-sm text-[#9ca0ae]">{Math.max(0, Math.floor(products.length * 0.45))}</span>
+                    <span className="text-sm text-[#11121c]">{Math.max(0, Math.floor(products.length * 0.45))}</span>
                   </button>
-                  <button type="button" className="flex w-full items-center justify-between text-left text-base text-[#2f3347]">
+                  <button type="button" className="flex w-full items-center justify-between text-left text-base text-[#11121c]">
                     <div className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-[#8e93a5]" />
+                      <Check className="h-4 w-4 text-[#11121c]" />
                       <span>Girls</span>
                     </div>
-                    <span className="text-sm text-[#9ca0ae]">{products.length}</span>
+                    <span className="text-sm text-[#11121c]">{products.length}</span>
                   </button>
                 </div>
               ) : null}
@@ -561,21 +594,21 @@ export function ShopBrowser({
                 <div className="space-y-4">
                   <button
                     type="button"
-                    className="flex w-full items-center justify-between text-left text-base text-[#2f3347]"
+                    className="flex w-full items-center justify-between text-left text-base text-[#11121c]"
                     onClick={() => setMobileDraftFilters((current) => ({ ...current, category: "" }))}
                   >
                     <span>All</span>
-                    {mobileDraftFilters.category === "" ? <Check className="h-4 w-4 text-[#ff3f6c]" /> : null}
+                    {mobileDraftFilters.category === "" ? <Check className="h-4 w-4 text-[#daff3a]" /> : null}
                   </button>
                   {facets.categories.map((category) => (
                     <button
                       key={category}
                       type="button"
-                      className="flex w-full items-center justify-between text-left text-base capitalize text-[#2f3347]"
+                      className="flex w-full items-center justify-between text-left text-base capitalize text-[#11121c]"
                       onClick={() => setMobileDraftFilters((current) => ({ ...current, category }))}
                     >
                       <span>{category.replaceAll("-", " ")}</span>
-                      {mobileDraftFilters.category === category ? <Check className="h-4 w-4 text-[#ff3f6c]" /> : null}
+                      {mobileDraftFilters.category === category ? <Check className="h-4 w-4 text-[#daff3a]" /> : null}
                     </button>
                   ))}
                 </div>
@@ -585,18 +618,18 @@ export function ShopBrowser({
                 <div className="space-y-3">
                   {facets.brands.length ? (
                     facets.brands.map((brand) => (
-                      <label key={brand} className="flex items-center justify-between text-base text-[#2f3347]">
+                      <label key={brand} className="flex items-center justify-between text-base text-[#11121c]">
                         <span>{brand}</span>
                         <input
                           type="checkbox"
-                          className="h-4 w-4 accent-[#ff3f6c]"
+                          className="h-4 w-4 accent-[#daff3a]"
                           checked={mobileDraftFilters.brands.includes(brand)}
                           onChange={() => toggleDraftBrand(brand)}
                         />
                       </label>
                     ))
                   ) : (
-                    <p className="text-sm text-[#8a8fa0]">No brands available.</p>
+                    <p className="text-sm text-[#11121c]">No brands available.</p>
                   )}
                 </div>
               ) : null}
@@ -607,7 +640,7 @@ export function ShopBrowser({
                     <button
                       key={option.label}
                       type="button"
-                      className="flex w-full items-center justify-between text-left text-base text-[#2f3347]"
+                      className="flex w-full items-center justify-between text-left text-base text-[#11121c]"
                       onClick={() =>
                         setMobileDraftFilters((current) => ({
                           ...current,
@@ -616,7 +649,7 @@ export function ShopBrowser({
                       }
                     >
                       <span>{option.label}</span>
-                      {mobileDraftFilters.minDiscount === option.value ? <Check className="h-4 w-4 text-[#ff3f6c]" /> : null}
+                      {mobileDraftFilters.minDiscount === option.value ? <Check className="h-4 w-4 text-[#daff3a]" /> : null}
                     </button>
                   ))}
                 </div>
@@ -628,7 +661,7 @@ export function ShopBrowser({
                     <button
                       key={option.label}
                       type="button"
-                      className="flex w-full items-center justify-between text-left text-base text-[#2f3347]"
+                      className="flex w-full items-center justify-between text-left text-base text-[#11121c]"
                       onClick={() =>
                         setMobileDraftFilters((current) => ({
                           ...current,
@@ -637,7 +670,7 @@ export function ShopBrowser({
                       }
                     >
                       <span>{option.label}</span>
-                      {mobileDraftFilters.minRating === option.value ? <Check className="h-4 w-4 text-[#ff3f6c]" /> : null}
+                      {mobileDraftFilters.minRating === option.value ? <Check className="h-4 w-4 text-[#daff3a]" /> : null}
                     </button>
                   ))}
                 </div>
@@ -647,41 +680,41 @@ export function ShopBrowser({
                 <div className="space-y-4">
                   <button
                     type="button"
-                    className="flex w-full items-center justify-between text-left text-base text-[#2f3347]"
+                    className="flex w-full items-center justify-between text-left text-base text-[#11121c]"
                     onClick={() => setMobileDraftFilters((current) => ({ ...current, availability: "all" }))}
                   >
                     <span>All</span>
-                    {mobileDraftFilters.availability === "all" ? <Check className="h-4 w-4 text-[#ff3f6c]" /> : null}
+                    {mobileDraftFilters.availability === "all" ? <Check className="h-4 w-4 text-[#daff3a]" /> : null}
                   </button>
                   <button
                     type="button"
-                    className="flex w-full items-center justify-between text-left text-base text-[#2f3347]"
+                    className="flex w-full items-center justify-between text-left text-base text-[#11121c]"
                     onClick={() => setMobileDraftFilters((current) => ({ ...current, availability: "in-stock" }))}
                   >
                     <span>In Stock</span>
-                    {mobileDraftFilters.availability === "in-stock" ? <Check className="h-4 w-4 text-[#ff3f6c]" /> : null}
+                    {mobileDraftFilters.availability === "in-stock" ? <Check className="h-4 w-4 text-[#daff3a]" /> : null}
                   </button>
                   <button
                     type="button"
-                    className="flex w-full items-center justify-between text-left text-base text-[#2f3347]"
+                    className="flex w-full items-center justify-between text-left text-base text-[#11121c]"
                     onClick={() => setMobileDraftFilters((current) => ({ ...current, availability: "out-of-stock" }))}
                   >
                     <span>Out of Stock</span>
-                    {mobileDraftFilters.availability === "out-of-stock" ? <Check className="h-4 w-4 text-[#ff3f6c]" /> : null}
+                    {mobileDraftFilters.availability === "out-of-stock" ? <Check className="h-4 w-4 text-[#daff3a]" /> : null}
                   </button>
                 </div>
               ) : null}
 
               {activeMobileFilterSection === "price" ? (
                 <div className="space-y-5">
-                  <p className="text-sm text-[#8a8fa0]">
+                  <p className="text-sm text-[#11121c]">
                     Range: Rs. {mobileDraftFilters.minPrice ?? facets.minPrice} - Rs. {mobileDraftFilters.maxPrice ?? facets.maxPrice}
                   </p>
-                  <label className="block text-sm text-[#3f4458]">
+                  <label className="block text-sm text-[#11121c]">
                     Minimum
                     <input
                       type="range"
-                      className="mt-2 w-full accent-[#ff3f6c]"
+                      className="mt-2 w-full accent-[#daff3a]"
                       min={facets.minPrice}
                       max={Math.max(facets.maxPrice, facets.minPrice + 1)}
                       value={mobileDraftFilters.minPrice ?? facets.minPrice}
@@ -695,11 +728,11 @@ export function ShopBrowser({
                       }}
                     />
                   </label>
-                  <label className="block text-sm text-[#3f4458]">
+                  <label className="block text-sm text-[#11121c]">
                     Maximum
                     <input
                       type="range"
-                      className="mt-2 w-full accent-[#ff3f6c]"
+                      className="mt-2 w-full accent-[#daff3a]"
                       min={facets.minPrice}
                       max={Math.max(facets.maxPrice, facets.minPrice + 1)}
                       value={mobileDraftFilters.maxPrice ?? facets.maxPrice}
@@ -718,13 +751,13 @@ export function ShopBrowser({
             </div>
           </div>
 
-          <div className="grid h-[56px] grid-cols-2 border-t border-[#ebedf2]">
-            <button type="button" className="text-sm font-medium tracking-[0.05em] text-[#3e4152]" onClick={closeMobileFilters}>
+          <div className="sticky bottom-0 grid min-h-[56px] shrink-0 grid-cols-2 border-t border-[#11121c] bg-white pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2">
+            <button type="button" className="text-sm font-medium tracking-[0.05em] text-[#11121c]" onClick={closeMobileFilters}>
               CLOSE
             </button>
             <button
               type="button"
-              className="border-l border-[#ebedf2] text-sm font-semibold tracking-[0.05em] text-[#ff3f6c]"
+              className="border-l border-[#11121c] bg-[#daff3a] text-sm font-semibold tracking-[0.05em] text-[#11121c]"
               onClick={applyMobileFilters}
             >
               APPLY
@@ -735,3 +768,5 @@ export function ShopBrowser({
     </>
   );
 }
+
+
