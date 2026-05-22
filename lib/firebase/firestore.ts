@@ -174,6 +174,194 @@ function mapDoc<T>(doc: FirebaseFirestore.DocumentSnapshot): T {
   } as T;
 }
 
+function isSupabaseProductsReady() {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+}
+
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        return toStringArray(parsed);
+      } catch {
+        return [trimmed];
+      }
+    }
+
+    if (trimmed.includes(",")) {
+      return trimmed
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+    }
+
+    return [trimmed];
+  }
+
+  return [];
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function slugify(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function normalizeSupabaseProduct(row: Record<string, unknown>): Product | null {
+  const pickString = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = row[key];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+    return "";
+  };
+
+  const id = pickString("id", "product_id", "slug");
+  if (!id) {
+    return null;
+  }
+
+  const name = pickString("name", "title") || "Untitled Product";
+  const description = pickString("description", "short_description", "shortDescription") || name;
+  const slug = pickString("slug") || slugify(name) || id;
+  const images = toStringArray(row.images);
+  const backupImage = pickString("image", "image_url", "thumbnail");
+  const finalImages = images.length ? images : backupImage ? [backupImage] : [];
+  const createdAt = pickString("createdAt", "created_at") || new Date().toISOString();
+
+  return {
+    id,
+    name,
+    slug,
+    subtitle: pickString("subtitle"),
+    shortDescription: pickString("shortDescription", "short_description"),
+    description,
+    price: toNumber(row.price),
+    discountPercent: toNumber(row.discountPercent ?? row.discount_percent, 0),
+    images: finalImages,
+    videoUrl: pickString("videoUrl", "video_url"),
+    category: pickString("category") || "general",
+    subcategory: pickString("subcategory", "sub_category"),
+    stock: toNumber(row.stock),
+    sku: pickString("sku"),
+    brand: pickString("brand"),
+    featured: Boolean(row.featured),
+    recommended: Boolean(row.recommended),
+    popularity: toNumber(row.popularity, 0),
+    tags: toStringArray(row.tags),
+    badges: toStringArray(row.badges),
+    rating: toNumber(row.rating, 0),
+    reviewCount: toNumber(row.reviewCount ?? row.review_count, 0),
+    status: pickString("status") as Product["status"],
+    visibility: pickString("visibility") as Product["visibility"],
+    createdAt,
+    updatedAt: pickString("updatedAt", "updated_at") || createdAt,
+  };
+}
+
+async function fetchSupabaseProductsRows(queryString: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+
+  const response = await fetch(`${supabaseUrl}/rest/v1/products?${queryString}`, {
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Supabase products request failed (${response.status})`);
+  }
+
+  const payload = (await response.json()) as unknown;
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload as Record<string, unknown>[];
+}
+
+async function getProductsFromSupabase(filters?: {
+  category?: string;
+  search?: string;
+  sort?: "popularity" | "price-asc" | "price-desc" | "newest";
+  minPrice?: number;
+  maxPrice?: number;
+  status?: string;
+  visibility?: string;
+  brands?: string[];
+  minRating?: number;
+  availability?: "in-stock" | "out-of-stock";
+  minDiscount?: number;
+}) {
+  if (!isSupabaseProductsReady()) {
+    return null;
+  }
+
+  try {
+    const rows = await fetchSupabaseProductsRows("select=*");
+    if (!rows) {
+      return null;
+    }
+
+    const normalized = rows
+      .map((row) => normalizeSupabaseProduct(row))
+      .filter((product): product is Product => Boolean(product));
+
+    const sort = filters?.sort ?? "popularity";
+    return sortProducts(applyProductsPostFilters(normalized, filters), sort);
+  } catch (error) {
+    console.warn("Supabase products fetch failed. Falling back to Firestore.", error);
+    return null;
+  }
+}
+
+async function getProductByIdFromSupabase(productId: string) {
+  if (!isSupabaseProductsReady()) {
+    return null;
+  }
+
+  try {
+    const byIdRows = await fetchSupabaseProductsRows(`select=*&id=eq.${encodeURIComponent(productId)}&limit=1`);
+    const byId = byIdRows?.[0] ? normalizeSupabaseProduct(byIdRows[0]) : null;
+    if (byId) {
+      return byId;
+    }
+
+    const bySlugRows = await fetchSupabaseProductsRows(`select=*&slug=eq.${encodeURIComponent(productId)}&limit=1`);
+    return bySlugRows?.[0] ? normalizeSupabaseProduct(bySlugRows[0]) : null;
+  } catch (error) {
+    console.warn("Supabase product-by-id fetch failed. Falling back to Firestore.", error);
+    return null;
+  }
+}
+
 const FALLBACK_USERS: UserProfile[] = [
   {
     id: "user-1",
@@ -593,6 +781,15 @@ function computeTopCustomers(orders: Order[], users: UserProfile[]) {
 }
 
 export async function getFeaturedProducts(limit = 6): Promise<Product[]> {
+  const supabaseProducts = await getProductsFromSupabase({ sort: "newest" });
+  if (supabaseProducts && supabaseProducts.length) {
+    const featured = supabaseProducts.filter((product) => Boolean(product.featured));
+    if (featured.length) {
+      return featured.slice(0, limit);
+    }
+    return supabaseProducts.slice(0, limit);
+  }
+
   if (!isFirestoreReady()) {
     return FALLBACK_PRODUCTS.slice(0, limit);
   }
@@ -645,6 +842,11 @@ export async function getProducts(filters?: {
   availability?: "in-stock" | "out-of-stock";
   minDiscount?: number;
 }): Promise<Product[]> {
+  const supabaseProducts = await getProductsFromSupabase(filters);
+  if (supabaseProducts) {
+    return supabaseProducts;
+  }
+
   if (!isFirestoreReady()) {
     const sort = filters?.sort ?? "popularity";
     return sortProducts(applyProductsPostFilters(FALLBACK_PRODUCTS, filters), sort);
@@ -711,6 +913,11 @@ export async function getRecommendedProducts(input: { productId?: string; catego
 }
 
 export async function getProductById(productId: string): Promise<Product | null> {
+  const supabaseProduct = await getProductByIdFromSupabase(productId);
+  if (supabaseProduct) {
+    return supabaseProduct;
+  }
+
   if (!isFirestoreReady()) {
     return FALLBACK_PRODUCTS.find((item) => item.id === productId || item.slug === productId) ?? null;
   }
