@@ -2,11 +2,9 @@
 
 import { DragEvent, useState } from "react";
 import { toast } from "sonner";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { firebaseStorage } from "@/lib/firebase/client";
 
 interface ProductFormValues {
   id?: string;
@@ -91,9 +89,22 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
     setUploading(true);
 
     try {
-      const fileRef = ref(firebaseStorage, `products/${Date.now()}-${file.name}`);
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "products");
+      formData.append("record", "false");
+
+      const response = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await response.json()) as { imageUrl?: string; error?: string };
+      if (!response.ok || !data.imageUrl) {
+        throw new Error(data.error ?? "Image upload failed");
+      }
+
+      const url = data.imageUrl;
       setForm((prev) => ({ ...prev, images: [...prev.images, url] }));
       toast.success("Image uploaded");
     } catch (error) {

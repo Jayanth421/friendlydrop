@@ -26,6 +26,50 @@ export function BannerForm() {
     active: true,
   });
   const [saving, setSaving] = useState(false);
+  const [uploadingDesktop, setUploadingDesktop] = useState(false);
+  const [uploadingMobile, setUploadingMobile] = useState(false);
+
+  const uploadBannerImage = async (file: File, mode: "desktop" | "mobile") => {
+    if (mode === "desktop") {
+      setUploadingDesktop(true);
+    } else {
+      setUploadingMobile(true);
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "banners");
+      formData.append("record", "false");
+
+      const response = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await response.json()) as { imageUrl?: string; error?: string };
+      if (!response.ok || !data.imageUrl) {
+        throw new Error(data.error ?? "Banner upload failed");
+      }
+
+      if (mode === "desktop") {
+        setForm((prev) => ({ ...prev, imageDesktop: data.imageUrl! }));
+      } else {
+        setForm((prev) => ({ ...prev, imageMobile: data.imageUrl! }));
+      }
+
+      toast.success("Banner image uploaded");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not upload banner image");
+    } finally {
+      if (mode === "desktop") {
+        setUploadingDesktop(false);
+      } else {
+        setUploadingMobile(false);
+      }
+    }
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -66,8 +110,32 @@ export function BannerForm() {
         <option value="offer">offer</option>
         <option value="category">category</option>
       </select>
-      <Input placeholder="Desktop image URL" value={form.imageDesktop} onChange={(event) => setForm({ ...form, imageDesktop: event.target.value })} required />
-      <Input placeholder="Mobile image URL" value={form.imageMobile} onChange={(event) => setForm({ ...form, imageMobile: event.target.value })} />
+      <div className="space-y-2">
+        <Input placeholder="Desktop image URL" value={form.imageDesktop} onChange={(event) => setForm({ ...form, imageDesktop: event.target.value })} required />
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) uploadBannerImage(file, "desktop");
+          }}
+          className="block w-full text-xs"
+        />
+        {uploadingDesktop ? <p className="text-xs text-slate-500">Uploading desktop image...</p> : null}
+      </div>
+      <div className="space-y-2">
+        <Input placeholder="Mobile image URL" value={form.imageMobile} onChange={(event) => setForm({ ...form, imageMobile: event.target.value })} />
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) uploadBannerImage(file, "mobile");
+          }}
+          className="block w-full text-xs"
+        />
+        {uploadingMobile ? <p className="text-xs text-slate-500">Uploading mobile image...</p> : null}
+      </div>
       <select value={form.linkType} onChange={(event) => setForm({ ...form, linkType: event.target.value as "product" | "category" | "external" })} className="h-10 rounded border border-slate-200 px-2 text-sm">
         <option value="product">product</option>
         <option value="category">category</option>
@@ -79,7 +147,7 @@ export function BannerForm() {
         <input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} />
         Active
       </label>
-      <Button disabled={saving} className="sm:justify-self-start">
+      <Button disabled={saving || uploadingDesktop || uploadingMobile} className="sm:justify-self-start">
         {saving ? "Saving..." : "Save Banner"}
       </Button>
     </form>

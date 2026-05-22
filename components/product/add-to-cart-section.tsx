@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Upload } from "lucide-react";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { firebaseStorage } from "@/lib/firebase/client";
 import { Product } from "@/types";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/use-cart-store";
@@ -40,17 +38,24 @@ export function AddToCartSection({ product }: { product: Product }) {
     setUploading(true);
 
     try {
-      const storageRef = ref(firebaseStorage, `uploads/${user.uid}/${Date.now()}-${file.name}`);
-      await uploadBytes(storageRef, file);
-      const imageUrl = await getDownloadURL(storageRef);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "custom-uploads");
+      formData.append("record", "true");
+
+      const uploadResponse = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
+      });
+
+      const uploadData = (await uploadResponse.json()) as { imageUrl?: string; error?: string };
+      if (!uploadResponse.ok || !uploadData.imageUrl) {
+        throw new Error(uploadData.error ?? "Upload failed");
+      }
+
+      const imageUrl = uploadData.imageUrl;
 
       setCustomImageUrl(imageUrl);
-
-      await fetch("/api/uploads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl }),
-      });
 
       toast.success("Custom image uploaded.");
     } catch (error) {

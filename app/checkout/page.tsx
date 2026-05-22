@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useCartStore } from "@/store/use-cart-store";
@@ -11,7 +10,6 @@ import { calculateCheckoutSummary } from "@/lib/checkout-pricing";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { firebaseStorage } from "@/lib/firebase/client";
 
 declare global {
   interface Window {
@@ -205,16 +203,23 @@ export default function CheckoutPage() {
     setUploadingProof(true);
 
     try {
-      const storageRef = ref(firebaseStorage, `payments/upi/${user.uid}/${Date.now()}-${file.name}`);
-      await uploadBytes(storageRef, file);
-      const imageUrl = await getDownloadURL(storageRef);
-      setUpiProofImageUrl(imageUrl);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "payments-upi");
+      formData.append("record", "true");
 
-      await fetch("/api/uploads", {
+      const response = await fetch("/api/uploads", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl }),
+        body: formData,
       });
+
+      const data = (await response.json()) as { imageUrl?: string; error?: string };
+      if (!response.ok || !data.imageUrl) {
+        throw new Error(data.error ?? "Could not upload screenshot");
+      }
+
+      const imageUrl = data.imageUrl;
+      setUpiProofImageUrl(imageUrl);
 
       toast.success("Payment screenshot uploaded");
     } catch (error) {
