@@ -431,11 +431,11 @@ export function Navbar({ storeName, brandPrefix, logoUrl, menuEditor }: NavbarPr
         <div className="fixed inset-0 z-[70]">
           <button
             type="button"
-            className="absolute inset-0 bg-black/35"
+            className="absolute inset-0 bg-black/35 animate-in fade-in duration-200"
             aria-label="Close menu overlay"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <aside className="relative mx-auto mt-14 flex max-h-[calc(100vh-7rem)] w-[92%] max-w-[360px] flex-col overflow-hidden rounded-2xl bg-[#f5f5f6] shadow-[0_20px_50px_rgba(15,23,42,0.28)] lg:ml-0 lg:mt-0 lg:h-full lg:max-h-none lg:w-[86%] lg:max-w-[320px] lg:rounded-none lg:shadow-xl">
+          <aside className="absolute left-0 top-0 flex h-full w-[86%] max-w-[340px] flex-col overflow-hidden bg-[#f5f5f6] shadow-[0_20px_50px_rgba(15,23,42,0.28)] animate-in slide-in-from-left-12 duration-200">
             <div className="flex items-center justify-between border-b border-[#e2e3e6] px-5 py-4">
               <div className="flex items-center gap-2">
                 {activeColumnMenu ? (

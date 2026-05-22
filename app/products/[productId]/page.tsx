@@ -234,7 +234,7 @@ export default async function ProductDetailPage({ params }: { params: { productI
 
       {hasSection("feature_highlights") || hasSection("benefits") ? (
         <section className="mx-auto w-full max-w-[1400px] space-y-4 border border-[#dddbdc] bg-white p-5 md:p-8">
-          <h2 className="text-2xl text-[#262626]">Why You'll Love It</h2>
+          <h2 className="text-2xl text-[#262626]">Why You&apos;ll Love It</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {highlightPoints.map((point) => (
               <div key={point} className="border border-[#ecebeb] p-4 text-sm text-[#262626]">

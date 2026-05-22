@@ -1542,6 +1542,23 @@ export async function getStoreSettings(): Promise<StoreSettings> {
   });
 }
 
+export async function getStoreSettingsSafe(options?: { timeoutMs?: number; logLabel?: string }): Promise<StoreSettings> {
+  const timeoutMs = options?.timeoutMs ?? 2500;
+  const logLabel = options?.logLabel ?? "getStoreSettingsSafe";
+
+  try {
+    return await Promise.race([
+      getStoreSettings(),
+      new Promise<StoreSettings>((_, reject) => {
+        setTimeout(() => reject(new Error(`Store settings timed out after ${timeoutMs}ms`)), timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    console.warn(`[${logLabel}] Falling back to default store settings`, error);
+    return FALLBACK_SETTINGS;
+  }
+}
+
 export async function updateStoreSettings(updates: Partial<StoreSettings>) {
   ensureFirestoreReady();
   const current = await getStoreSettings();

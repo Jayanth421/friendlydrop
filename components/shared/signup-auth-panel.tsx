@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FirebaseError } from "firebase/app";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -90,8 +90,15 @@ export function SignupAuthPanel({ loginLeftImageUrl }: SignupAuthPanelProps) {
   };
 
   return (
-    <main className="max-w-none px-4 py-8 md:px-8 md:py-14">
-      <section className="mx-auto max-w-6xl rounded-[16px] border border-[#010101] bg-[#f7f7f7] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.04)] md:p-6">
+    <main className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-[2px] md:px-8">
+      <section className="relative w-full max-w-6xl overflow-y-auto rounded-[16px] border border-[#010101] bg-[#f7f7f7] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.3)] md:max-h-[94vh] md:p-6">
+        <Link
+          href="/"
+          aria-label="Close signup popup"
+          className="absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d2d2d2] bg-white text-[#2f3347] transition hover:bg-[#f4f4f4]"
+        >
+          <X className="h-4 w-4" />
+        </Link>
         <div className="grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
           <div className="relative hidden min-h-[640px] overflow-hidden rounded-[34px] bg-[#d9d9d9] lg:block">
             {loginLeftImageUrl ? (

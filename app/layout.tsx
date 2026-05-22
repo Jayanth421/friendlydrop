@@ -6,7 +6,7 @@ import { AppProviders } from "@/components/providers/app-providers";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
-import { getStoreSettings } from "@/lib/firebase/firestore";
+import { getStoreSettingsSafe } from "@/lib/firebase/firestore";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
@@ -15,7 +15,7 @@ const cormorant = Cormorant_Garamond({ subsets: ["latin"], variable: "--font-cor
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await getStoreSettings();
+  const settings = await getStoreSettingsSafe({ logLabel: "layout.generateMetadata" });
   const storeName = settings.storeName || "FriendlyDrop";
   const titlePrefix = settings.brandPrefix?.trim() ? `${settings.brandPrefix.trim()} ${storeName}` : storeName;
 
@@ -31,7 +31,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const settings = await getStoreSettings();
+  const settings = await getStoreSettingsSafe({ logLabel: "layout.root" });
 
   return (
     <html lang="en" className={`light ${manrope.variable} ${spaceGrotesk.variable} ${cormorant.variable}`} suppressHydrationWarning>
