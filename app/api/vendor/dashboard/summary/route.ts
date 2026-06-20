@@ -22,3 +22,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Could not fetch vendor dashboard" }, { status: 400 });
   }
 }
+

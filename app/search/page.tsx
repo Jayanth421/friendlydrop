@@ -23,3 +23,4 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
     </main>
   );
 }
+

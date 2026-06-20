@@ -22,3 +22,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Could not add expense" }, { status: 400 });
   }
 }
+

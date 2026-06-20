@@ -9,3 +9,4 @@ export async function GET(request: NextRequest) {
   const [integrationLogs, webhookLogs] = await Promise.all([getIntegrationLogs(100), getWebhookLogs(100)]);
   return NextResponse.json({ integrationLogs, webhookLogs });
 }
+

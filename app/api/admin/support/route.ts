@@ -8,12 +8,19 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   await requireApiPermission(request, "support:manage");
   const tickets = await getSupportTickets();
-  return NextResponse.json({ tickets });
+  return NextResponse.json(
+    { tickets },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }
 
 export async function POST(request: NextRequest) {
   try {
-    await requireApiPermission(request, "support:manage");
+    const admin = await requireApiPermission(request, "support:manage");
     const payload = supportTicketSchema.parse(await request.json());
 
     const ticket = await createSupportTicket({
@@ -21,7 +28,18 @@ export async function POST(request: NextRequest) {
       subject: payload.subject,
       category: payload.category,
       status: "open",
-      messages: [{ by: payload.userId, message: payload.message, at: new Date().toISOString() }],
+      agentConnected: true,
+      assignedTo: admin.uid,
+      messages: [
+        {
+          id: `msg-${Date.now()}`,
+          by: payload.userId,
+          byRole: "customer",
+          message: payload.message,
+          at: new Date().toISOString(),
+          attachments: payload.attachments,
+        },
+      ],
     });
 
     return NextResponse.json({ ok: true, ticket });
@@ -30,3 +48,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Could not create ticket" }, { status: 400 });
   }
 }
+

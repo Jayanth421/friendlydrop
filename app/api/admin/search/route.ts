@@ -10,3 +10,4 @@ export async function GET(request: NextRequest) {
   const result = await globalAdminSearch(query);
   return NextResponse.json(result);
 }
+

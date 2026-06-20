@@ -62,3 +62,4 @@ export default async function AdminShippingPage() {
     </div>
   );
 }
+

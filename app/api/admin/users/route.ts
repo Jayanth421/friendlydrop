@@ -9,3 +9,4 @@ export async function GET(request: NextRequest) {
   const users = await getAllUsers();
   return NextResponse.json({ users });
 }
+

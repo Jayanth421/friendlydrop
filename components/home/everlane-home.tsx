@@ -2,7 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Leaf, MapPin, Package, ShoppingBag } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { Product } from "@/types";
+import { CmsPageConfig, Product } from "@/types";
+import { resolveMediaUrl } from "@/lib/media";
 
 const CATEGORY_ITEMS = [
   {
@@ -55,13 +56,16 @@ const ALLOWED_HOSTS = new Set([
   "m.media-amazon.com",
   "api.qrserver.com",
   "i.pinimg.com",
+  "mhrkejroymytplmppjep.supabase.co",
 ]);
 
 function safeImage(input?: string, fallback?: string) {
   if (!input) return fallback ?? FALLBACK_HERO;
+  const resolved = resolveMediaUrl(input, { width: 1600, quality: 75, format: "webp" });
+  if (!resolved) return fallback ?? FALLBACK_HERO;
   try {
-    const url = new URL(input);
-    if (ALLOWED_HOSTS.has(url.hostname)) return input;
+    const url = new URL(resolved);
+    if (ALLOWED_HOSTS.has(url.hostname)) return resolved;
   } catch (error) {}
   return fallback ?? FALLBACK_HERO;
 }
@@ -97,12 +101,14 @@ export function EverlaneHome({
   featuredProducts,
   latestProducts,
   allProducts,
+  cmsPage,
 }: {
   featuredProducts: Product[];
   latestProducts: Product[];
   allProducts: Product[];
+  cmsPage?: CmsPageConfig | null;
 }) {
-  const heroImage = safeImage(featuredProducts[0]?.images[0], FALLBACK_HERO);
+  const heroImage = safeImage(cmsPage?.heroImageUrl || featuredProducts[0]?.images[0], FALLBACK_HERO);
   const categoryFallbacks = firstN(featuredProducts, 6, FALLBACK_HERO);
   const featuredRow = firstN(latestProducts, 5, FALLBACK_HERO);
   const socialStrip = firstN(allProducts, 5, FALLBACK_HERO);
@@ -116,10 +122,10 @@ export function EverlaneHome({
           <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
           <div className="absolute inset-y-0 left-[8%] flex max-w-xl flex-col justify-center text-white">
             <h1 className="font-sans text-4xl font-medium tracking-[0.02em] md:text-[64px] md:leading-[1.02]">
-              Your Cozy Era
+              {cmsPage?.title || "Your Cozy Era"}
             </h1>
             <p className="mt-4 text-xl font-light md:text-[34px] md:leading-[1.35]">
-              Get peak comfy-chic with new winter essentials.
+              {cmsPage?.excerpt || "Get peak comfy-chic with new winter essentials."}
             </p>
             <Link
               href="/products"

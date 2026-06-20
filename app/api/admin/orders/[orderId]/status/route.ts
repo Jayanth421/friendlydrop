@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api";
 import { updateStatusSchema } from "@/lib/validators";
-import { getOrder, getUserById, updateOrderStatus } from "@/lib/firebase/firestore";
+import { getOrder, updateOrderStatus } from "@/lib/firebase/firestore";
+import { getUserById } from "@/lib/firebase/firestore";
 import { sendOrderEmail } from "@/lib/email";
 import { logAdminActivity, logAdminAudit } from "@/lib/admin/logs";
 import { publishSystemEvent } from "@/lib/system-events";

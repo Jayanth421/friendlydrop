@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { isAdminRole, isVendorRole } from "@/lib/rbac";
 import { StoreMegaMenuColumn, StoreMenuEditorConfig } from "@/types";
+import { resolveMediaUrl } from "@/lib/media";
 
 interface NavbarProps {
   storeName: string;
@@ -112,6 +113,7 @@ export function Navbar({ storeName, brandPrefix, logoUrl, menuEditor }: NavbarPr
   const [mobileTopMenuId, setMobileTopMenuId] = useState<string | null>(null);
   const [mobileColumnId, setMobileColumnId] = useState<string | null>(null);
   const brandName = brandPrefix?.trim() ? `${brandPrefix.trim()} ${storeName}` : storeName;
+  const resolvedLogo = resolveMediaUrl(logoUrl, { width: 240, quality: 80, format: "webp" });
   const currentQuery = searchParams.toString();
   const primaryLinks = menuEditor?.desktopLinks?.length ? menuEditor.desktopLinks : FALLBACK_DESKTOP_LINKS;
   const mobileShopLinks = menuEditor?.mobileShopLinks?.length ? menuEditor.mobileShopLinks : FALLBACK_MOBILE_SHOP_LINKS;
@@ -182,6 +184,10 @@ export function Navbar({ storeName, brandPrefix, logoUrl, menuEditor }: NavbarPr
     ? activeTopMenu?.children.find((item) => item.id === mobileColumnId) ?? null
     : null;
 
+  if (pathname.startsWith("/admin")) {
+    return null;
+  }
+
   const isLinkActive = (href: string) => {
     const [linkPath, linkQuery = ""] = href.split("?");
     if (pathname !== linkPath) return false;
@@ -236,10 +242,10 @@ export function Navbar({ storeName, brandPrefix, logoUrl, menuEditor }: NavbarPr
           </button>
 
           <Link href="/" className="flex shrink-0 items-center lg:mr-0" aria-label={brandName}>
-            {logoUrl ? (
+            {resolvedLogo ? (
               <span
                 className="h-8 w-10 bg-contain bg-left bg-no-repeat md:h-10 md:w-20 md:bg-center"
-                style={{ backgroundImage: `url(${logoUrl})` }}
+                style={{ backgroundImage: `url(${resolvedLogo})` }}
                 aria-hidden="true"
               />
             ) : (

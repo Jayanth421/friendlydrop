@@ -1,4 +1,4 @@
-﻿import { requireAdminPermission } from "@/lib/auth/session";
+import { requireAdminPermission } from "@/lib/auth/session";
 import { getMarketingCampaigns } from "@/lib/firebase/firestore";
 import { MarketingCampaignForm } from "@/components/admin/marketing-campaign-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +41,7 @@ export default async function AdminMarketingPage() {
           {campaigns.map((campaign) => (
             <div key={campaign.id} className="rounded-md border border-slate-200 p-3 text-sm">
               <p className="font-semibold text-ink">{campaign.title}</p>
-              <p className="text-slate-500">{campaign.channel} • {campaign.audience} • {campaign.status}</p>
+              <p className="text-slate-500">{campaign.channel} � {campaign.audience} � {campaign.status}</p>
             </div>
           ))}
         </CardContent>
@@ -59,3 +59,4 @@ export default async function AdminMarketingPage() {
     </div>
   );
 }
+

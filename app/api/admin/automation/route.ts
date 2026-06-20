@@ -22,3 +22,4 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Could not update automation config" }, { status: 400 });
   }
 }
+

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/constants";
-import { getAdminAuth } from "@/lib/firebase/admin";
+import { getAdminAuth, getUserDisplayName, isFirebaseReady } from "@/lib/firebase/admin";
 import { upsertUserProfile } from "@/lib/firebase/firestore";
 import { trackAdminSession } from "@/lib/admin/logs";
 import { UserRole } from "@/types";
+import { assertRateLimit, buildRateLimitKey } from "@/lib/security/rate-limit";
+import { assertTrustedMutationRequest, toGuardErrorResponse } from "@/lib/security/request-guards";
 
 export const runtime = "nodejs";
 
@@ -95,11 +97,17 @@ function resolveRole(email: string): UserRole {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+    assertTrustedMutationRequest(request);
+    assertRateLimit({
+      key: buildRateLimitKey({ request, scope: "auth:create-session" }),
+      max: 20,
+      windowMs: 60_000,
+    });
+
+    if (!isFirebaseReady()) {
       return NextResponse.json(
         {
-          error:
-            "Missing Firebase Admin env vars. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY in .env.local",
+          error: "Missing Firebase admin env vars. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in .env.local",
         },
         { status: 500 },
       );
@@ -120,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     await upsertUserProfile({
       id: decoded.uid,
-      name: decoded.name ?? "Customer",
+      name: getUserDisplayName({ name: decoded.name, email }),
       email,
       phone: normalizePhone(phone),
       role,
@@ -148,20 +156,39 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
+    const guardError = toGuardErrorResponse(error);
+    if (guardError) {
+      return guardError;
+    }
     console.error(error);
     const message = error instanceof Error ? error.message : "Could not create session";
     return NextResponse.json({ error: `Could not create session: ${message}` }, { status: 401 });
   }
 }
 
-export async function DELETE() {
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: "",
-    maxAge: 0,
-    path: "/",
-  });
+export async function DELETE(request: NextRequest) {
+  try {
+    assertTrustedMutationRequest(request);
+    assertRateLimit({
+      key: buildRateLimitKey({ request, scope: "auth:clear-session" }),
+      max: 30,
+      windowMs: 60_000,
+    });
 
-  return response;
+    const response = NextResponse.json({ ok: true });
+    response.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: "",
+      maxAge: 0,
+      path: "/",
+    });
+
+    return response;
+  } catch (error) {
+    const guardError = toGuardErrorResponse(error);
+    if (guardError) {
+      return guardError;
+    }
+    return NextResponse.json({ error: "Could not clear session" }, { status: 400 });
+  }
 }

@@ -79,6 +79,10 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
   const searchParams = useSearchParams();
   const [form, setForm] = useState<StoreSettings>(settings);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [testingCashfree, setTestingCashfree] = useState(false);
+  const [cashfreeTestResult, setCashfreeTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   const initialTab = useMemo(() => {
     const requested = searchParams.get("tab");
     const allowed = new Set(["delivery", "payments", "integrations", "sitebuilder", "controls"]);
@@ -94,9 +98,42 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
     };
   }, [form.integrations.providers]);
 
+  const testCashfreeConnection = async () => {
+    setTestingCashfree(true);
+    setCashfreeTestResult(null);
+
+    try {
+      const response = await fetch("/api/admin/settings/test-cashfree", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appId: form.payments.cashfreeAppId,
+          secretKey: form.payments.cashfreeSecretKey,
+          isSandbox: form.payments.cashfreeSandboxMode,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.ok) {
+        setCashfreeTestResult({ success: true, message: data.message });
+        toast.success("Cashfree connection test passed!");
+      } else {
+        setCashfreeTestResult({ success: false, message: data.error || "Connection test failed." });
+        toast.error(data.error || "Cashfree connection test failed.");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown test error";
+      setCashfreeTestResult({ success: false, message: msg });
+      toast.error(msg);
+    } finally {
+      setTestingCashfree(false);
+    }
+  };
+
   const save = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
+    setError(null);
 
     const response = await fetch("/api/admin/settings", {
       method: "PUT",
@@ -110,6 +147,7 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
       const payload = await response.json().catch(() => null);
       const apiMessage = payload && typeof payload === "object" && "error" in payload ? String(payload.error) : "";
       const fallback = `Could not save settings (HTTP ${response.status})`;
+      setError(apiMessage || fallback);
       toast.error(apiMessage || fallback);
       return;
     }
@@ -128,6 +166,13 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
           <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Button>
         </CardHeader>
       </Card>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 flex flex-col gap-1">
+          <span className="font-bold">Error Saving Configurations:</span>
+          <p className="text-red-700 font-medium">{error}</p>
+        </div>
+      )}
 
       <Tabs defaultValue={initialTab} key={initialTab}>
         <TabsList>
@@ -346,8 +391,7 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
             <CardContent className="space-y-3">
               <div className="grid gap-3 md:grid-cols-4">
                 <Toggle checked={form.payments.systemEnabled} label="Payment system enabled" onChange={(value) => setForm({ ...form, payments: { ...form.payments, systemEnabled: value } })} />
-                <Toggle checked={form.payments.methods.razorpay} label="Razorpay" onChange={(value) => setForm({ ...form, payments: { ...form.payments, methods: { ...form.payments.methods, razorpay: value } } })} />
-                <Toggle checked={form.payments.methods.stripe} label="Stripe" onChange={(value) => setForm({ ...form, payments: { ...form.payments, methods: { ...form.payments.methods, stripe: value } } })} />
+                <Toggle checked={form.payments.methods.cashfree ?? false} label="Cashfree" onChange={(value) => setForm({ ...form, payments: { ...form.payments, methods: { ...form.payments.methods, cashfree: value } } })} />
                 <Toggle checked={form.payments.methods.cod} label="COD" onChange={(value) => setForm({ ...form, payments: { ...form.payments, methods: { ...form.payments.methods, cod: value } } })} />
                 <Toggle checked={form.payments.methods.upi} label="UPI" onChange={(value) => setForm({ ...form, payments: { ...form.payments, methods: { ...form.payments.methods, upi: value } } })} />
                 <Toggle checked={form.payments.methods.cards} label="Cards" onChange={(value) => setForm({ ...form, payments: { ...form.payments, methods: { ...form.payments.methods, cards: value } } })} />
@@ -364,6 +408,74 @@ export function StoreSettingsForm({ settings }: { settings: StoreSettings }) {
                 <Toggle checked={form.payments.rules.smartFallbackEnabled} label="Smart fallback" onChange={(value) => setForm({ ...form, payments: { ...form.payments, rules: { ...form.payments.rules, smartFallbackEnabled: value } } })} />
                 <Toggle checked={form.payments.rules.autoRefundOnReturnApproval} label="Auto refund on approval" onChange={(value) => setForm({ ...form, payments: { ...form.payments, rules: { ...form.payments.rules, autoRefundOnReturnApproval: value } } })} />
                 <Toggle checked={form.payments.rules.partialRefundsEnabled} label="Partial refunds" onChange={(value) => setForm({ ...form, payments: { ...form.payments, rules: { ...form.payments.rules, partialRefundsEnabled: value } } })} />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Cashfree Integration Credentials</CardTitle>
+              <CardDescription>
+                Set up Cashfree as the sole payment gateway. These credentials take priority over environment variables.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2">
+              <div>
+                <p className="mb-1 text-xs text-slate-500">Cashfree App ID (Client ID)</p>
+                <input 
+                  className="h-9 w-full rounded border border-slate-200 px-2 text-sm" 
+                  value={form.payments.cashfreeAppId ?? ""} 
+                  onChange={(event) => setForm({ ...form, payments: { ...form.payments, cashfreeAppId: event.target.value } })} 
+                  placeholder="e.g. TEST12345678"
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-xs text-slate-500">Cashfree Secret Key</p>
+                <input 
+                  type="password"
+                  className="h-9 w-full rounded border border-slate-200 px-2 text-sm" 
+                  value={form.payments.cashfreeSecretKey ?? ""} 
+                  onChange={(event) => setForm({ ...form, payments: { ...form.payments, cashfreeSecretKey: event.target.value } })} 
+                  placeholder="e.g. cfsecret_..."
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-xs text-slate-500">Cashfree Webhook Secret</p>
+                <input 
+                  type="password"
+                  className="h-9 w-full rounded border border-slate-200 px-2 text-sm" 
+                  value={form.payments.cashfreeWebhookSecret ?? ""} 
+                  onChange={(event) => setForm({ ...form, payments: { ...form.payments, cashfreeWebhookSecret: event.target.value } })} 
+                  placeholder="e.g. cfwebhook_..."
+                />
+              </div>
+              <div className="flex items-end">
+                <Toggle 
+                  checked={form.payments.cashfreeSandboxMode ?? true} 
+                  label="Sandbox/Test Mode" 
+                  onChange={(value) => setForm({ ...form, payments: { ...form.payments, cashfreeSandboxMode: value } })} 
+                />
+              </div>
+              <div className="md:col-span-2 rounded bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-600">
+                <span className="font-semibold text-slate-700">Webhook URL: </span>
+                <code>{typeof window !== "undefined" ? `${window.location.origin}/api/payments/cashfree/webhook` : "https://yourdomain.com/api/payments/cashfree/webhook"}</code>
+              </div>
+              <div className="md:col-span-2 flex flex-col gap-2 pt-2">
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={testingCashfree}
+                    onClick={testCashfreeConnection}
+                  >
+                    {testingCashfree ? "Testing Connection..." : "Test Cashfree Credentials"}
+                  </Button>
+                  {cashfreeTestResult && (
+                    <span className={`text-xs font-semibold ${cashfreeTestResult.success ? "text-emerald-600" : "text-rose-600"}`}>
+                      {cashfreeTestResult.message}
+                    </span>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { ADMIN_2FA_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/lib/constants";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import { SESSION_COOKIE_NAME } from "@/lib/constants";
+import { getAdminAuth, getUserDisplayName } from "@/lib/firebase/admin";
+import { getUserById } from "@/lib/firebase/firestore";
 import { hasPermission, isAdminRole, isVendorRole } from "@/lib/rbac";
 import { AdminPermission, UserRole } from "@/types";
 
@@ -22,13 +23,12 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   try {
     const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
-    const userDoc = await getAdminDb().collection("users").doc(decoded.uid).get();
-    const userData = userDoc.data();
+    const userData = await getUserById(decoded.uid);
 
     return {
       uid: decoded.uid,
       email: decoded.email ?? "",
-      name: userData?.name ?? decoded.name ?? "Customer",
+      name: userData?.name ?? getUserDisplayName(decoded),
       role: userData?.role ?? "user",
       twoFactorEnabled: Boolean(userData?.twoFactorEnabled),
     };
@@ -52,10 +52,6 @@ export async function requireAdmin() {
 
   if (!isAdminRole(user.role)) {
     redirect("/");
-  }
-
-  if (user.twoFactorEnabled && !cookies().get(ADMIN_2FA_COOKIE_NAME)?.value) {
-    redirect("/admin-2fa");
   }
 
   return user;

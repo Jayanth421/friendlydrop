@@ -5,6 +5,7 @@ import { productSchema } from "@/lib/validators";
 import { deleteProduct, getProductById, updateProduct, upsertProductPageBuilderOverride } from "@/lib/firebase/firestore";
 import { logAdminActivity, logAdminAudit } from "@/lib/admin/logs";
 import { buildAutoProductSyncDraft } from "@/lib/product-page-builder";
+import { normalizeMediaReference } from "@/lib/media";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { produc
     const admin = await requireApiPermission(request, "products:manage");
     const before = await getProductById(params.productId);
     const parsed = productSchema.partial().parse(await request.json());
+    const images = parsed.images?.map((image) => normalizeMediaReference(image)).filter(Boolean) as string[] | undefined;
+    const primaryImage =
+      normalizeMediaReference(parsed.primaryImage) ??
+      (images?.[0] ? images[0] : undefined);
+    const videoUrl = normalizeMediaReference(parsed.videoUrl);
     const autoDraft = buildAutoProductSyncDraft({
       ...before,
       ...parsed,
@@ -20,6 +26,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { produc
 
     await updateProduct(params.productId, {
       ...parsed,
+      ...(images ? { images } : {}),
+      ...(primaryImage ? { primaryImage } : {}),
+      ...(videoUrl ? { videoUrl } : {}),
       ...(parsed.name ? { slug: createSlug(parsed.name) } : {}),
       subtitle: parsed.subtitle ?? autoDraft.subtitle,
       shortDescription: parsed.shortDescription ?? autoDraft.shortDescription,

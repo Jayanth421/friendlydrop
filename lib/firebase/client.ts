@@ -1,35 +1,51 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "AIzaSyA5Vp-j3R1pYQpVBEsAm1u7X71-vw06Luc",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "appp-3da83.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "appp-3da83",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "appp-3da83.firebasestorage.app",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "666460919818",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "1:666460919818:web:77e474f7c1203ac4e7e7f3",
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID ?? "G-CTR7SECT7H",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+export function isFirebaseClientReady() {
+  return Boolean(
+    firebaseConfig.apiKey &&
+      firebaseConfig.authDomain &&
+      firebaseConfig.projectId &&
+      firebaseConfig.storageBucket &&
+      firebaseConfig.messagingSenderId &&
+      firebaseConfig.appId,
+  );
+}
 
-export const firebaseAuth = getAuth(app);
-export const firebaseDb = getFirestore(app);
-export const firebaseStorage = getStorage(app);
+function ensureFirebaseClientReady() {
+  if (!isFirebaseClientReady()) {
+    throw new Error("Missing Firebase public env vars. Check NEXT_PUBLIC_FIREBASE_* values.");
+  }
+}
 
-export let firebaseAnalytics: Analytics | null = null;
+export function getFirebaseApp() {
+  if (getApps().length) {
+    return getApp();
+  }
 
-if (typeof window !== "undefined") {
-  isSupported()
-    .then((supported) => {
-      if (supported) {
-        firebaseAnalytics = getAnalytics(app);
-      }
-    })
-    .catch(() => {
-      firebaseAnalytics = null;
-    });
+  ensureFirebaseClientReady();
+  return initializeApp(firebaseConfig);
+}
+
+export function getFirebaseAuth() {
+  return getAuth(getFirebaseApp());
+}
+
+export function getFirebaseDb() {
+  return getFirestore(getFirebaseApp());
+}
+
+export function getFirebaseStorage() {
+  return getStorage(getFirebaseApp());
 }

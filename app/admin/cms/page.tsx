@@ -8,3 +8,4 @@ export default async function AdminCmsPage() {
 
   return <CmsManager initialPages={pages} />;
 }
+

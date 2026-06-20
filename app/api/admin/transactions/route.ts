@@ -9,3 +9,4 @@ export async function GET(request: NextRequest) {
   const transactions = await getTransactions();
   return NextResponse.json({ transactions });
 }
+

@@ -57,3 +57,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Could not verify code" }, { status: 400 });
   }
 }
+

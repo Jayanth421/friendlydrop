@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+const mediaReferenceSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => /^https?:\/\//i.test(value) || value.includes("/"), "Invalid media reference");
+
 export const addressSchema = z.object({
   fullName: z.string().min(2),
   phone: z.string().min(10).max(14),
@@ -16,16 +22,16 @@ export const cartItemSchema = z.object({
   name: z.string().min(1),
   price: z.number().nonnegative(),
   quantity: z.number().int().min(1).max(20),
-  image: z.string().url(),
+  image: mediaReferenceSchema,
   variantId: z.string().optional(),
-  customImageUrl: z.string().url().optional(),
+  customImageUrl: mediaReferenceSchema.optional(),
 });
 
 export const createOrderSchema = z.object({
   items: z.array(cartItemSchema).min(1),
   address: addressSchema,
   couponCode: z.string().trim().optional(),
-  paymentMethod: z.enum(["razorpay", "stripe", "upi-offline"]),
+  paymentMethod: z.enum(["cashfree", "upi-offline", "razorpay", "stripe"]),
   priority: z.enum(["express", "normal"]).optional().default("normal"),
 });
 
@@ -39,6 +45,7 @@ export const verifyRazorpaySchema = z.object({
 export const productVariantSchema = z.object({
   id: z.string().min(1),
   size: z.string().optional(),
+  color: z.string().optional(),
   type: z.string().optional(),
   material: z.string().optional(),
   sku: z.string().min(2),
@@ -53,14 +60,25 @@ export const productSchema = z.object({
   description: z.string().min(10),
   price: z.number().min(1),
   discountPercent: z.number().min(0).max(90).optional(),
-  images: z.array(z.string().url()).min(1),
-  videoUrl: z.string().url().optional(),
+  primaryImage: mediaReferenceSchema.optional(),
+  images: z.array(mediaReferenceSchema).min(1),
+  videoUrl: mediaReferenceSchema.optional(),
   category: z.string().min(1),
   subcategory: z.string().optional(),
   stock: z.number().int().min(0),
   sku: z.string().optional(),
   brand: z.string().optional(),
+  costPrice: z.number().min(0).optional(),
+  taxRate: z.number().min(0).max(100).optional(),
+  lowStockThreshold: z.number().int().min(0).optional(),
   weightGrams: z.number().min(0).optional(),
+  dimensions: z
+    .object({
+      widthCm: z.number().min(0).optional(),
+      heightCm: z.number().min(0).optional(),
+      depthCm: z.number().min(0).optional(),
+    })
+    .optional(),
   attributes: z.record(z.string()).optional(),
   variants: z.array(productVariantSchema).optional(),
   tags: z.array(z.string()).optional(),
@@ -96,7 +114,7 @@ export const productSchema = z.object({
 export const upiOfflinePaymentSchema = z.object({
   orderDraft: createOrderSchema,
   upiVpa: z.string().trim().min(3),
-  proofImageUrl: z.string().url(),
+  proofImageUrl: mediaReferenceSchema,
   transactionId: z.string().trim().min(3).max(64).optional(),
 });
 
@@ -172,12 +190,33 @@ export const supportTicketSchema = z.object({
   category: z.enum(["refund", "delay", "damage", "other"]),
   message: z.string().min(4),
   userId: z.string().min(1),
+  attachments: z
+    .array(
+      z.object({
+        url: mediaReferenceSchema,
+        type: z.enum(["image", "video", "pdf", "file"]),
+        name: z.string().optional(),
+        sizeBytes: z.number().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const supportTicketUpdateSchema = z.object({
   status: z.enum(["open", "in_progress", "resolved"]).optional(),
   assignedTo: z.string().optional(),
+  agentConnected: z.boolean().optional(),
   message: z.string().min(1).optional(),
+  attachments: z
+    .array(
+      z.object({
+        url: mediaReferenceSchema,
+        type: z.enum(["image", "video", "pdf", "file"]),
+        name: z.string().optional(),
+        sizeBytes: z.number().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const returnRequestSchema = z.object({
@@ -220,8 +259,8 @@ export const vendorApprovalSchema = z.object({
 export const bannerSchema = z.object({
   title: z.string().min(2),
   type: z.enum(["hero", "offer", "category"]),
-  imageDesktop: z.string().url(),
-  imageMobile: z.string().url().optional(),
+  imageDesktop: mediaReferenceSchema,
+  imageMobile: mediaReferenceSchema.optional(),
   linkType: z.enum(["product", "category", "external"]),
   linkTarget: z.string().min(1),
   position: z.number().int().min(0).default(0),
@@ -235,7 +274,7 @@ export const categorySchema = z.object({
   name: z.string().min(2),
   slug: z.string().min(2),
   description: z.string().max(500).optional(),
-  image: z.string().url().optional(),
+  image: mediaReferenceSchema.optional(),
   parentId: z.string().nullable().optional(),
   level: z.number().int().min(0).default(0),
   tags: z.array(z.string()).optional(),
@@ -310,6 +349,7 @@ const paymentMethodsSchema = z.object({
   razorpay: z.boolean(),
   stripe: z.boolean(),
   paypal: z.boolean(),
+  cashfree: z.boolean().optional(),
 });
 
 const paymentRulesSchema = z.object({
@@ -367,7 +407,7 @@ const storeMegaMenuColumnSchema = z.object({
   id: z.string().min(1),
   heading: z.string().min(1),
   links: z.array(storeMegaMenuEntrySchema),
-  imageUrl: z.string().optional().or(z.literal("")),
+  imageUrl: mediaReferenceSchema.optional().or(z.literal("")),
   imageAlt: z.string().optional(),
   ctaLabel: z.string().optional(),
   ctaHref: z.string().optional().or(z.literal("")),
@@ -375,7 +415,7 @@ const storeMegaMenuColumnSchema = z.object({
 
 const storeMegaMenuPromoCardSchema = z.object({
   enabled: z.boolean().optional(),
-  imageUrl: z.string().optional().or(z.literal("")),
+  imageUrl: mediaReferenceSchema.optional().or(z.literal("")),
   title: z.string().optional(),
   text: z.string().optional(),
   ctaLabel: z.string().optional(),
@@ -409,7 +449,7 @@ const storeMenuPopupStyleSchema = z.object({
   cardBackgroundColor: z.string().min(3),
   animation: z.enum(["none", "fade", "slide"]),
   showPromoCard: z.boolean(),
-  promoImageUrl: z.string().optional().or(z.literal("")),
+  promoImageUrl: mediaReferenceSchema.optional().or(z.literal("")),
   promoTitle: z.string().optional(),
   promoText: z.string().optional(),
   promoCtaLabel: z.string().optional(),
@@ -420,8 +460,8 @@ export const storeSettingsSchema = z.object({
   storeName: z.string().min(2),
   brandPrefix: z.string().max(30).optional(),
   brandTagline: z.string().max(180).optional(),
-  logoUrl: z.string().url().optional().or(z.literal("")),
-  loginLeftImageUrl: z.string().url().optional().or(z.literal("")),
+  logoUrl: mediaReferenceSchema.optional().or(z.literal("")),
+  loginLeftImageUrl: mediaReferenceSchema.optional().or(z.literal("")),
   supportEmail: z.string().email(),
   supportPhone: z.string().min(8),
   taxRate: z.number().min(0).max(100),
@@ -447,6 +487,10 @@ export const storeSettingsSchema = z.object({
     systemEnabled: z.boolean(),
     methods: paymentMethodsSchema,
     rules: paymentRulesSchema,
+    cashfreeAppId: z.string().optional().or(z.literal("")),
+    cashfreeSecretKey: z.string().optional().or(z.literal("")),
+    cashfreeWebhookSecret: z.string().optional().or(z.literal("")),
+    cashfreeSandboxMode: z.boolean().optional(),
   }),
   integrations: z.object({
     defaultMode: z.enum(["test", "live"]),
@@ -534,9 +578,15 @@ export const automationCenterSchema = z.object({
 });
 
 export const cmsPageSchema = z.object({
+  id: z.string().optional(),
   title: z.string().min(2),
   slug: z.string().min(2),
   status: z.enum(["draft", "published"]),
+  content: z.string().max(50000).optional(),
+  heroImageUrl: mediaReferenceSchema.optional().or(z.literal("")),
+  template: z.enum(["default", "landing", "policy", "contact"]).optional(),
+  showInFooter: z.boolean().optional(),
+  excerpt: z.string().max(280).optional(),
   seo: z
     .object({
       metaTitle: z.string().optional(),

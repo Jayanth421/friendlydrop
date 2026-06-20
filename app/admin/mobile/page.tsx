@@ -8,3 +8,4 @@ export default async function AdminMobileControlsPage() {
 
   return <MobileControlsForm initialControls={controls} />;
 }
+

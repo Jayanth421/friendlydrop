@@ -1,21 +1,75 @@
+import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth/api";
-import { saveUploadRecord } from "@/lib/firebase/firestore";
+import { getUploadByChecksum, saveUploadRecord } from "@/lib/firebase/firestore";
+import { getAdminStorage } from "@/lib/firebase/admin";
+import {
+  buildMediaObjectPath,
+  isAllowedMediaFolder,
+  MediaFolder,
+  MEDIA_FOLDERS,
+  resolveMediaUrl,
+} from "@/lib/media";
+import { beginIdempotentRequest, completeIdempotentRequest, failIdempotentRequest } from "@/lib/security/idempotency";
+import { assertRateLimit, buildRateLimitKey } from "@/lib/security/rate-limit";
+import { assertTrustedMutationRequest, toGuardErrorResponse } from "@/lib/security/request-guards";
 
 export const runtime = "nodejs";
 
-function sanitizeFilename(filename: string) {
-  return filename.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-");
-}
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 40 * 1024 * 1024;
+const MAX_DOC_BYTES = 12 * 1024 * 1024;
+const MAX_ZIP_BYTES = 100 * 1024 * 1024;
 
 function isJsonRequest(request: NextRequest) {
   const contentType = request.headers.get("content-type") ?? "";
   return contentType.includes("application/json");
 }
 
+function isZipUpload(file: File, contentType: string) {
+  const lowerName = file.name.toLowerCase();
+  return (
+    contentType === "application/zip" ||
+    contentType === "application/x-zip-compressed" ||
+    lowerName.endsWith(".zip")
+  );
+}
+
+function getUploadLimit(contentType: string, file?: File) {
+  if (file && isZipUpload(file, contentType)) {
+    return MAX_ZIP_BYTES;
+  }
+  if (contentType.startsWith("image/")) {
+    return MAX_IMAGE_BYTES;
+  }
+  if (contentType.startsWith("video/")) {
+    return MAX_VIDEO_BYTES;
+  }
+  return MAX_DOC_BYTES;
+}
+
+function isSupportedContentType(contentType: string, file?: File) {
+  if (file && isZipUpload(file, contentType)) {
+    return true;
+  }
+
+  return (
+    contentType.startsWith("image/") ||
+    contentType.startsWith("video/") ||
+    contentType === "application/pdf" ||
+    contentType.startsWith("text/")
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await requireApiUser(request);
+    assertTrustedMutationRequest(request);
+    assertRateLimit({
+      key: buildRateLimitKey({ request, scope: "uploads:post", actorId: user.uid }),
+      max: 20,
+      windowMs: 60_000,
+    });
 
     if (isJsonRequest(request)) {
       const { imageUrl } = (await request.json()) as { imageUrl?: string };
@@ -24,68 +78,147 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "imageUrl is required" }, { status: 400 });
       }
 
-      await saveUploadRecord(user.uid, imageUrl);
+      await saveUploadRecord({
+        userId: user.uid,
+        imageUrl,
+        storageProvider: "firebase",
+        processingState: "uploaded",
+      });
       return NextResponse.json({ ok: true, imageUrl });
     }
 
     const formData = await request.formData();
     const file = formData.get("file");
-    const folder = String(formData.get("folder") ?? "uploads").trim() || "uploads";
+    const folder = String(formData.get("folder") ?? MEDIA_FOLDERS.products).trim() || MEDIA_FOLDERS.products;
     const shouldRecord = String(formData.get("record") ?? "false").toLowerCase() === "true";
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET ?? "uploads";
-    const authKey = supabaseServiceRoleKey ?? supabaseKey;
-
-    if (!supabaseUrl || !supabaseKey || !authKey) {
-      return NextResponse.json({ error: "Supabase env is not configured" }, { status: 400 });
-    }
-
-    const safeName = sanitizeFilename(file.name || "file");
-    const objectPath = `${folder}/${user.uid}/${Date.now()}-${safeName}`;
-    const arrayBuffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-
-    const uploadResponse = await fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${objectPath}`, {
-      method: "POST",
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${authKey}`,
-        "Content-Type": file.type || "application/octet-stream",
-        "x-upsert": "false",
-      },
-      body: bytes,
-    });
-
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
+    if (!isAllowedMediaFolder(folder)) {
       return NextResponse.json(
         {
-          error: "Supabase upload failed",
-          details: errorText.slice(0, 300),
+          error: "Unsupported folder",
+          supportedFolders: Object.values(MEDIA_FOLDERS),
         },
         { status: 400 },
       );
     }
 
-    const imageUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${objectPath}`;
-
-    if (shouldRecord) {
-      await saveUploadRecord(user.uid, imageUrl);
+    const contentType = file.type || "application/octet-stream";
+    if (!isSupportedContentType(contentType, file)) {
+      return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
     }
 
-    return NextResponse.json({
-      ok: true,
-      imageUrl,
-      path: objectPath,
+    const maxBytes = getUploadLimit(contentType, file);
+    if (file.size > maxBytes) {
+      return NextResponse.json({ error: `File exceeds max size (${Math.round(maxBytes / (1024 * 1024))}MB)` }, { status: 400 });
+    }
+
+    const bucket = getAdminStorage().bucket();
+    if (!bucket) {
+      return NextResponse.json({ error: "Firebase storage is not configured" }, { status: 400 });
+    }
+
+    const objectPath = buildMediaObjectPath({
+      folder: folder as MediaFolder,
+      userId: user.uid,
+      filename: file.name || "file",
     });
-  } catch {
-    return NextResponse.json({ error: "Upload record save failed" }, { status: 400 });
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    const checksumSha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+    const existingUpload = await getUploadByChecksum(checksumSha256, user.uid);
+
+    if (existingUpload?.imageUrl) {
+      return NextResponse.json({
+        ok: true,
+        imageUrl: existingUpload.imageUrl,
+        mediaUrl: existingUpload.imageUrl,
+        path: existingUpload.path,
+        contentType: existingUpload.contentType ?? contentType,
+        sizeBytes: existingUpload.sizeBytes ?? file.size,
+        checksumSha256,
+        deduplicated: true,
+        duplicateOfUploadId: existingUpload.id,
+      });
+    }
+
+    const uploadIdempotency = await beginIdempotentRequest({
+      scope: "uploads:create",
+      actorId: user.uid,
+      key: request.headers.get("Idempotency-Key"),
+    });
+
+    if (uploadIdempotency.mode === "replay") {
+      return NextResponse.json(uploadIdempotency.responseBody, { status: uploadIdempotency.responseStatus });
+    }
+
+    if (uploadIdempotency.mode === "in_progress") {
+      return NextResponse.json({ error: "Upload already in progress for this request" }, { status: 409 });
+    }
+
+    try {
+      const fileRef = bucket.file(objectPath);
+      await fileRef.save(Buffer.from(bytes), {
+        metadata: {
+          contentType: contentType,
+        },
+        public: true,
+      });
+
+      const mediaUrl = resolveMediaUrl(objectPath, { quality: contentType.startsWith("image/") ? 75 : undefined });
+
+      if (shouldRecord) {
+        await saveUploadRecord({
+          userId: user.uid,
+          imageUrl: mediaUrl,
+          path: objectPath,
+          folder,
+          contentType,
+          sizeBytes: file.size,
+          checksumSha256,
+          storageProvider: "firebase",
+          processingState: "queued",
+        });
+      }
+
+      const responseBody = {
+        ok: true,
+        imageUrl: mediaUrl,
+        mediaUrl,
+        path: objectPath,
+        contentType,
+        sizeBytes: file.size,
+        checksumSha256,
+        deduplicated: false,
+      };
+
+      await completeIdempotentRequest({
+        scope: "uploads:create",
+        actorId: user.uid,
+        key: uploadIdempotency.key,
+        responseStatus: 200,
+        responseBody,
+      });
+
+      return NextResponse.json(responseBody);
+    } catch (error) {
+      await failIdempotentRequest({
+        scope: "uploads:create",
+        actorId: user.uid,
+        key: uploadIdempotency.key,
+        errorMessage: error instanceof Error ? error.message : "upload_failed",
+      });
+      throw error;
+    }
+  } catch (error) {
+    const guardError = toGuardErrorResponse(error);
+    if (guardError) {
+      return guardError;
+    }
+    return NextResponse.json({ error: "Upload failed" }, { status: 400 });
   }
 }
+

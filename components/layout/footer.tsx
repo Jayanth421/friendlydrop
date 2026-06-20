@@ -15,6 +15,10 @@ export function Footer({ storeName, brandPrefix, brandTagline, supportEmail, sup
   const pathname = usePathname();
   const brandName = brandPrefix?.trim() ? `${brandPrefix.trim()} ${storeName}` : storeName;
 
+  if (pathname.startsWith("/admin")) {
+    return null;
+  }
+
   return (
     <footer className={`border-t border-[#dddbdc] bg-[#f5f4f4] ${pathname === "/products" ? "hidden lg:block" : ""}`}>
       <div className="mx-auto max-w-[1400px] px-4 py-12 md:px-10">

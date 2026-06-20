@@ -3,37 +3,30 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FirebaseError } from "firebase/app";
 import { Eye, EyeOff, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { resolveMediaUrl } from "@/lib/media";
 
 interface SignupAuthPanelProps {
   loginLeftImageUrl?: string;
 }
 
 function getSignupErrorMessage(error: unknown) {
-  if (error instanceof FirebaseError) {
-    switch (error.code) {
-      case "auth/email-already-in-use":
-        return "This email is already in use. Try signing in instead.";
-      case "auth/invalid-email":
-        return "Please enter a valid email address.";
-      case "auth/weak-password":
-        return "Password is too weak. Use at least 6 characters.";
-      case "auth/operation-not-allowed":
-        return "Email/password sign-up is disabled in Firebase Auth.";
-      case "auth/network-request-failed":
-        return "Network error. Check your internet and try again.";
-      default:
-        return `Signup failed (${error.code}).`;
-    }
-  }
-
   if (error instanceof Error) {
-    return error.message;
+    const message = error.message;
+    if (message.includes("auth/email-already-in-use")) {
+      return "This email is already in use. Try signing in instead.";
+    }
+    if (message.includes("auth/invalid-email")) {
+      return "Please enter a valid email address.";
+    }
+    if (message.includes("auth/weak-password")) {
+      return "Password is too weak. Use at least 6 characters.";
+    }
+    return message;
   }
 
   return "Signup failed.";
@@ -44,7 +37,8 @@ function normalizePhone(phone: string) {
 }
 
 export function SignupAuthPanel({ loginLeftImageUrl }: SignupAuthPanelProps) {
-  const { signup, loginWithGoogle, loading } = useAuth();
+  const { signup, loading } = useAuth();
+  const signupArtwork = resolveMediaUrl(loginLeftImageUrl, { width: 1200, quality: 70, format: "webp" });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -76,19 +70,6 @@ export function SignupAuthPanel({ loginLeftImageUrl }: SignupAuthPanelProps) {
     }
   };
 
-  const onGoogleSignup = async () => {
-    setSubmitting(true);
-    try {
-      await loginWithGoogle();
-      toast.success("Signed in with Google");
-      router.push("/");
-    } catch (error) {
-      toast.error(getSignupErrorMessage(error));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <main className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-[2px] md:px-8">
       <section className="relative w-full max-w-6xl overflow-y-auto rounded-[16px] border border-[#010101] bg-[#f7f7f7] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.3)] md:max-h-[94vh] md:p-6">
@@ -101,8 +82,8 @@ export function SignupAuthPanel({ loginLeftImageUrl }: SignupAuthPanelProps) {
         </Link>
         <div className="grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
           <div className="relative hidden min-h-[640px] overflow-hidden rounded-[34px] bg-[#d9d9d9] lg:block">
-            {loginLeftImageUrl ? (
-              <div role="img" aria-label="Signup artwork" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${loginLeftImageUrl})` }} />
+            {signupArtwork ? (
+              <div role="img" aria-label="Signup artwork" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${signupArtwork})` }} />
             ) : (
               <>
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,#f8f8f8_0,#d8d8d8_62%)]" />
@@ -186,25 +167,6 @@ export function SignupAuthPanel({ loginLeftImageUrl }: SignupAuthPanelProps) {
                   {submitting ? "Creating..." : "Create Account"}
                 </Button>
               </form>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-4 h-12 w-full rounded-full border-[#010101] bg-[#f1f1f1] text-sm font-medium text-[#242424] hover:bg-[#e9e9e9]"
-                disabled={submitting || loading}
-                onClick={onGoogleSignup}
-              >
-                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                  <path
-                    fill="#EA4335"
-                    d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.8-5.5 3.8-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.9 3.3 14.7 2.4 12 2.4A9.6 9.6 0 0 0 2.4 12c0 5.3 4.3 9.6 9.6 9.6 5.5 0 9.1-3.9 9.1-9.3 0-.6-.1-1.1-.2-1.5z"
-                  />
-                  <path fill="#34A853" d="M3.5 7.5 6.7 9.8A6 6 0 0 1 12 5.9c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.9 3.3 14.7 2.4 12 2.4c-3.7 0-6.9 2.1-8.5 5.1z" />
-                  <path fill="#FBBC05" d="M12 21.6c2.6 0 4.8-.9 6.4-2.5l-3-2.4c-.8.6-1.9 1-3.4 1a6 6 0 0 1-5.6-4.1l-3.1 2.4A9.6 9.6 0 0 0 12 21.6z" />
-                  <path fill="#4285F4" d="M21.1 12.3c0-.6-.1-1.1-.2-1.5H12v3.9h5.5c-.2 1.1-.9 2.2-2.1 3l3 2.4c1.7-1.6 2.7-4 2.7-6.8z" />
-                </svg>
-                Sign up with Google
-              </Button>
 
               <p className="mt-10 text-center text-sm text-slate-500">
                 Already have an account?{" "}

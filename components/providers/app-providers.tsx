@@ -4,12 +4,14 @@ import { PropsWithChildren } from "react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/hooks/use-auth";
 import { StoreSync } from "@/components/providers/store-sync";
+import { CustomerSupportWidget } from "@/components/support/customer-support-widget";
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
     <AuthProvider>
       <StoreSync />
       {children}
+      <CustomerSupportWidget />
       <Toaster position="top-right" richColors />
     </AuthProvider>
   );

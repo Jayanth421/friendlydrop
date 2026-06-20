@@ -35,7 +35,7 @@ export type OrderStatus = "pending" | "confirmed" | "packed" | "shipped" | "deli
 
 export type DesignApprovalStatus = "pending" | "approved" | "rejected" | "flagged";
 
-export type PaymentProvider = "razorpay" | "stripe" | "upi_offline";
+export type PaymentProvider = "cashfree" | "upi_offline" | "razorpay" | "stripe";
 
 export type PaymentStatus = "initiated" | "success" | "failed" | "refunded";
 
@@ -84,6 +84,7 @@ export interface UserProfile {
 export interface ProductVariant {
   id: string;
   size?: string;
+  color?: string;
   type?: string;
   material?: string;
   sku: string;
@@ -110,6 +111,7 @@ export interface Product {
   description: string;
   price: number;
   discountPercent?: number;
+  primaryImage?: string;
   images: string[];
   videoUrl?: string;
   category: ProductCategory;
@@ -126,7 +128,15 @@ export interface Product {
   badges?: string[];
   rating?: number;
   reviewCount?: number;
+  costPrice?: number;
+  taxRate?: number;
+  lowStockThreshold?: number;
   weightGrams?: number;
+  dimensions?: {
+    widthCm?: number;
+    heightCm?: number;
+    depthCm?: number;
+  };
   deliveryTime?: string;
   shippingInfo?: string;
   trustBadges?: string[];
@@ -206,9 +216,10 @@ export interface ProductPageTemplate {
   name: string;
   description?: string;
   sections: ProductPageSectionConfig[];
-  createdAt: string;
+  createdAt?: string;
   updatedAt: string;
   createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface ProductPageBuilderOverride {
@@ -402,9 +413,18 @@ export interface UploadRecord {
   userId: string;
   orderId?: string;
   imageUrl: string;
+  path?: string;
+  folder?: string;
+  contentType?: string;
+  sizeBytes?: number;
+  checksumSha256?: string;
+  storageProvider?: "supabase" | "firebase";
+  duplicateOfUploadId?: string;
+  processingState?: "uploaded" | "deduplicated" | "queued";
   status?: DesignApprovalStatus;
   flaggedReason?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Transaction {
@@ -469,9 +489,30 @@ export interface SupportTicket {
   category: "refund" | "delay" | "damage" | "other";
   status: "open" | "in_progress" | "resolved";
   assignedTo?: string;
-  messages: Array<{ by: string; message: string; at: string }>;
+  agentConnected?: boolean;
+  customerTyping?: boolean;
+  staffTyping?: boolean;
+  lastCustomerSeenAt?: string;
+  lastStaffSeenAt?: string;
+  messages: SupportChatMessage[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SupportChatAttachment {
+  url: string;
+  type: "image" | "video" | "pdf" | "file";
+  name?: string;
+  sizeBytes?: number;
+}
+
+export interface SupportChatMessage {
+  id: string;
+  by: string;
+  byRole?: UserRole | "assistant_bot" | "customer";
+  message: string;
+  at: string;
+  attachments?: SupportChatAttachment[];
 }
 
 export interface ReturnRequest {
@@ -574,6 +615,7 @@ export interface PaymentMethodControl {
   razorpay: boolean;
   stripe: boolean;
   paypal: boolean;
+  cashfree: boolean;
 }
 
 export interface PaymentRuleConfig {
@@ -592,6 +634,10 @@ export interface PaymentControlConfig {
   systemEnabled: boolean;
   methods: PaymentMethodControl;
   rules: PaymentRuleConfig;
+  cashfreeAppId?: string;
+  cashfreeSecretKey?: string;
+  cashfreeWebhookSecret?: string;
+  cashfreeSandboxMode?: boolean;
 }
 
 export interface ApiIntegrationProvider {
@@ -694,6 +740,11 @@ export interface CmsPageConfig {
   title: string;
   slug: string;
   status: "draft" | "published";
+  content?: string;
+  heroImageUrl?: string;
+  template?: "default" | "landing" | "policy" | "contact";
+  showInFooter?: boolean;
+  excerpt?: string;
   seo?: SeoMeta;
   updatedAt: string;
 }

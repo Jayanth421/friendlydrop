@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 export async function PATCH(request: NextRequest, { params }: { params: { userId: string } }) {
   try {
-    const admin = await requireApiPermission(request, "team:manage");
+    const admin = await requireApiPermission(request, "users:manage");
     const payload = adminRoleSchema.parse(await request.json());
 
     await updateUserRole(params.userId, payload.role);

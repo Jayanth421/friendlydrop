@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSlug } from "@/lib/utils";
 import { requireApiPermission } from "@/lib/auth/api";
 import { createProductsBulk, getMetaAdsConfig, getProducts, syncMetaAdsCatalog } from "@/lib/firebase/firestore";
+import { getAdminDb } from "@/lib/firebase/admin";
 import { logAdminActivity, logAdminAudit } from "@/lib/admin/logs";
 import { bulkImportRowsSchema } from "@/lib/validators";
 import { BulkImportValidationError, Product } from "@/types";
@@ -286,3 +287,82 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Bulk upload failed" }, { status: 400 });
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const admin = await requireApiPermission(request, "products:manage");
+    const { ids, updates } = await request.json();
+
+    if (!Array.isArray(ids) || !ids.length) {
+      return NextResponse.json({ error: "Missing product IDs" }, { status: 400 });
+    }
+
+    const db = getAdminDb();
+    const batch = db.batch();
+    const now = new Date().toISOString();
+
+    for (const id of ids) {
+      const ref = db.collection("products").doc(id);
+      batch.set(ref, { ...updates, updatedAt: now }, { merge: true });
+    }
+
+    await batch.commit();
+
+    await logAdminActivity({
+      actorId: admin.uid,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: "products_bulk_updated",
+      targetType: "products",
+      targetId: `bulk_update_${ids.length}`,
+      details: {
+        count: ids.length,
+        updates,
+      },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Bulk update failed" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const admin = await requireApiPermission(request, "products:manage");
+    const { ids } = await request.json();
+
+    if (!Array.isArray(ids) || !ids.length) {
+      return NextResponse.json({ error: "Missing product IDs" }, { status: 400 });
+    }
+
+    const db = getAdminDb();
+    const batch = db.batch();
+
+    for (const id of ids) {
+      const ref = db.collection("products").doc(id);
+      batch.delete(ref);
+    }
+
+    await batch.commit();
+
+    await logAdminActivity({
+      actorId: admin.uid,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: "products_bulk_deleted",
+      targetType: "products",
+      targetId: `bulk_delete_${ids.length}`,
+      details: {
+        count: ids.length,
+      },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Bulk delete failed" }, { status: 500 });
+  }
+}
+

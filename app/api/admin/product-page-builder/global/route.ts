@@ -37,3 +37,4 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Could not update product page builder config" }, { status: 400 });
   }
 }
+

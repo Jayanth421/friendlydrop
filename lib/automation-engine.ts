@@ -47,7 +47,7 @@ function buildAutoShipping(order: Order): ShippingDetails {
   };
 }
 
-export async function runPostPaymentAutomation(order: Order, input: { provider: "razorpay" | "stripe" }) {
+export async function runPostPaymentAutomation(order: Order, input: { provider: "razorpay" | "stripe" | "cashfree" | "upi_offline" }) {
   const settings = await getStoreSettings();
 
   await publishSystemEvent({
@@ -168,3 +168,4 @@ export async function runPostPaymentAutomation(order: Order, input: { provider: 
     },
   });
 }
+

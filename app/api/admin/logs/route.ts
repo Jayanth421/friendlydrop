@@ -9,3 +9,4 @@ export async function GET(request: NextRequest) {
   const [activityLogs, auditLogs] = await Promise.all([getActivityLogs(), getAuditLogs()]);
   return NextResponse.json({ activityLogs, auditLogs });
 }
+

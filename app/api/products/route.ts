@@ -51,20 +51,33 @@ export async function GET(request: NextRequest) {
           ? sortParam
           : undefined;
 
-  const [products, allProducts] = await Promise.all([
-    getProducts({
-      category,
-      search,
-      sort: normalizedSort,
-      minPrice: parseNumber(minPrice),
-      maxPrice: parseNumber(maxPrice),
-      brands,
-      minRating: parseNumber(minRating),
-      availability: availability === "in-stock" || availability === "out-of-stock" ? availability : undefined,
-      minDiscount: parseNumber(minDiscount),
-    }),
-    getProducts(),
-  ]);
+  const hasFilters = Boolean(
+    category ||
+    search ||
+    minPrice ||
+    maxPrice ||
+    minRating ||
+    minDiscount ||
+    (availability === "in-stock" || availability === "out-of-stock") ||
+    (brands && brands.length),
+  );
+
+  const allProducts = await getProducts();
+  const products = hasFilters
+    ? await getProducts({
+        category,
+        search,
+        sort: normalizedSort,
+        minPrice: parseNumber(minPrice),
+        maxPrice: parseNumber(maxPrice),
+        brands,
+        minRating: parseNumber(minRating),
+        availability: availability === "in-stock" || availability === "out-of-stock" ? availability : undefined,
+        minDiscount: parseNumber(minDiscount),
+      })
+    : normalizedSort
+      ? await getProducts({ sort: normalizedSort })
+      : allProducts;
 
   const facets = {
     categories: Array.from(new Set(allProducts.map((product) => product.category))).sort(),
@@ -83,5 +96,13 @@ export async function GET(request: NextRequest) {
     facets.minPrice = 0;
   }
 
-  return NextResponse.json({ products, facets });
+  return NextResponse.json(
+    { products, facets },
+    {
+      headers: {
+        "Cache-Control": "public, s-maxage=45, stale-while-revalidate=300",
+      },
+    },
+  );
 }
+

@@ -16,3 +16,4 @@ export async function PUT(request: NextRequest) {
   await saveWishlist(user.uid, productIds);
   return NextResponse.json({ ok: true });
 }
+

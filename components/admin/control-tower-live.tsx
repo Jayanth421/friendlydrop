@@ -90,30 +90,30 @@ export function ControlTowerLive({ initialSnapshot }: { initialSnapshot: Control
         <KpiCard label="Live Stream" value={streamConnected ? "Connected" : "Reconnecting"} helper="SSE realtime channel" />
       </div>
 
-      <Card>
+      <Card className="border-stone-200 bg-white/95 shadow-sm">
         <CardHeader>
           <CardTitle>Connected Commerce Flow</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-2 text-sm text-slate-700 md:grid-cols-5">
-          <div className="rounded border border-slate-200 p-3">Orders</div>
-          <div className="rounded border border-slate-200 p-3">Payments</div>
-          <div className="rounded border border-slate-200 p-3">Delivery</div>
-          <div className="rounded border border-slate-200 p-3">Inventory</div>
-          <div className="rounded border border-slate-200 p-3">Customers</div>
+        <CardContent className="grid gap-2 text-sm text-stone-700 md:grid-cols-5">
+          <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">Orders</div>
+          <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">Payments</div>
+          <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">Delivery</div>
+          <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">Inventory</div>
+          <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">Customers</div>
         </CardContent>
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
+        <Card className="border-stone-200 bg-white/95 shadow-sm">
           <CardHeader>
             <CardTitle>Gateway Health</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {snapshot.gatewayMetrics.map((metric) => (
-              <div key={metric.provider} className="flex items-center justify-between rounded border border-slate-200 p-3">
+              <div key={metric.provider} className="flex items-center justify-between rounded-xl border border-stone-200 p-3">
                 <div>
                   <p className="font-medium text-ink">{metric.provider}</p>
-                  <p className="text-slate-500">
+                  <p className="text-stone-500">
                     {metric.successful} success / {metric.failed} failed
                   </p>
                 </div>
@@ -123,16 +123,16 @@ export function ControlTowerLive({ initialSnapshot }: { initialSnapshot: Control
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-stone-200 bg-white/95 shadow-sm">
           <CardHeader>
             <CardTitle>Module Sync Health</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {snapshot.moduleSync.map((module) => (
-              <div key={module.module} className="flex items-center justify-between rounded border border-slate-200 p-3">
+              <div key={module.module} className="flex items-center justify-between rounded-xl border border-stone-200 p-3">
                 <div>
                   <p className="font-medium text-ink">{module.module}</p>
-                  <p className="text-slate-500">{module.lastEventAt ? formatDate(module.lastEventAt) : "No event yet"}</p>
+                  <p className="text-stone-500">{module.lastEventAt ? formatDate(module.lastEventAt) : "No event yet"}</p>
                 </div>
                 <span
                   className={
@@ -150,34 +150,34 @@ export function ControlTowerLive({ initialSnapshot }: { initialSnapshot: Control
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
+        <Card className="border-stone-200 bg-white/95 shadow-sm">
           <CardHeader>
             <CardTitle>Automation Rules</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             {snapshot.rules.map((rule) => (
-              <div key={rule.id} className="rounded border border-slate-200 p-3">
+              <div key={rule.id} className="rounded-xl border border-stone-200 p-3">
                 <p className="font-semibold text-ink">{rule.name}</p>
-                <p className="text-slate-500">{rule.description}</p>
-                <p className="mt-1 text-xs text-slate-600">Trigger: {rule.triggerEvent}</p>
-                <p className="mt-1 text-xs text-slate-600">Actions: {rule.actions.join(", ")}</p>
+                <p className="text-stone-500">{rule.description}</p>
+                <p className="mt-1 text-xs text-stone-600">Trigger: {rule.triggerEvent}</p>
+                <p className="mt-1 text-xs text-stone-600">Actions: {rule.actions.join(", ")}</p>
               </div>
             ))}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-stone-200 bg-white/95 shadow-sm">
           <CardHeader>
             <CardTitle>Live Event Feed</CardTitle>
           </CardHeader>
           <CardContent className="max-h-[420px] space-y-2 overflow-auto text-sm">
             {snapshot.events.map((event) => (
-              <div key={event.id} className="rounded border border-slate-200 p-3">
+              <div key={event.id} className="rounded-xl border border-stone-200 p-3">
                 <p className="font-medium text-ink">
-                  {event.type} <span className="text-xs text-slate-500">({event.module})</span>
+                  {event.type} <span className="text-xs text-stone-500">({event.module})</span>
                 </p>
-                <p className="text-xs text-slate-500">{formatDate(event.createdAt)}</p>
-                {event.orderId ? <p className="text-xs text-slate-600">Order: {event.orderId}</p> : null}
+                <p className="text-xs text-stone-500">{formatDate(event.createdAt)}</p>
+                {event.orderId ? <p className="text-xs text-stone-600">Order: {event.orderId}</p> : null}
               </div>
             ))}
           </CardContent>

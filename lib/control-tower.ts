@@ -146,3 +146,4 @@ export async function getControlTowerSnapshot(): Promise<ControlTowerSnapshot> {
     rules: AUTOMATION_RULES,
   };
 }
+

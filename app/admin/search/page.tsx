@@ -35,3 +35,4 @@ export default async function AdminSearchPage({ searchParams }: { searchParams: 
     </div>
   );
 }
+

@@ -9,3 +9,4 @@ export async function GET(request: NextRequest) {
   const orders = await getUserOrders(user.uid);
   return NextResponse.json({ orders });
 }
+

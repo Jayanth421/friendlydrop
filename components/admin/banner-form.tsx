@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { normalizeMediaReference, resolveMediaUrl } from "@/lib/media";
 
 export function BannerForm() {
   const [form, setForm] = useState<{
@@ -47,15 +48,20 @@ export function BannerForm() {
         body: formData,
       });
 
-      const data = (await response.json()) as { imageUrl?: string; error?: string };
+      const data = (await response.json()) as { imageUrl?: string; path?: string; error?: string };
       if (!response.ok || !data.imageUrl) {
         throw new Error(data.error ?? "Banner upload failed");
       }
 
+      const reference = normalizeMediaReference(data.path ?? data.imageUrl);
+      if (!reference) {
+        throw new Error("Upload did not return media reference");
+      }
+
       if (mode === "desktop") {
-        setForm((prev) => ({ ...prev, imageDesktop: data.imageUrl! }));
+        setForm((prev) => ({ ...prev, imageDesktop: reference }));
       } else {
-        setForm((prev) => ({ ...prev, imageMobile: data.imageUrl! }));
+        setForm((prev) => ({ ...prev, imageMobile: reference }));
       }
 
       toast.success("Banner image uploaded");
@@ -78,7 +84,8 @@ export function BannerForm() {
     try {
       const payload = {
         ...form,
-        imageMobile: form.imageMobile.trim() ? form.imageMobile : undefined,
+        imageDesktop: normalizeMediaReference(form.imageDesktop),
+        imageMobile: normalizeMediaReference(form.imageMobile?.trim() ? form.imageMobile : undefined),
       };
 
       const response = await fetch("/api/admin/banners", {
@@ -111,7 +118,7 @@ export function BannerForm() {
         <option value="category">category</option>
       </select>
       <div className="space-y-2">
-        <Input placeholder="Desktop image URL" value={form.imageDesktop} onChange={(event) => setForm({ ...form, imageDesktop: event.target.value })} required />
+        <Input placeholder="Desktop media path" value={form.imageDesktop} onChange={(event) => setForm({ ...form, imageDesktop: event.target.value })} required />
         <input
           type="file"
           accept="image/*"
@@ -122,9 +129,10 @@ export function BannerForm() {
           className="block w-full text-xs"
         />
         {uploadingDesktop ? <p className="text-xs text-slate-500">Uploading desktop image...</p> : null}
+        {form.imageDesktop ? <img src={resolveMediaUrl(form.imageDesktop) || ""} alt="Desktop preview" className="h-16 w-full rounded border object-cover" /> : null}
       </div>
       <div className="space-y-2">
-        <Input placeholder="Mobile image URL" value={form.imageMobile} onChange={(event) => setForm({ ...form, imageMobile: event.target.value })} />
+        <Input placeholder="Mobile media path" value={form.imageMobile} onChange={(event) => setForm({ ...form, imageMobile: event.target.value })} />
         <input
           type="file"
           accept="image/*"
@@ -135,6 +143,7 @@ export function BannerForm() {
           className="block w-full text-xs"
         />
         {uploadingMobile ? <p className="text-xs text-slate-500">Uploading mobile image...</p> : null}
+        {form.imageMobile ? <img src={resolveMediaUrl(form.imageMobile) || ""} alt="Mobile preview" className="h-16 w-full rounded border object-cover" /> : null}
       </div>
       <select value={form.linkType} onChange={(event) => setForm({ ...form, linkType: event.target.value as "product" | "category" | "external" })} className="h-10 rounded border border-slate-200 px-2 text-sm">
         <option value="product">product</option>

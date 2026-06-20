@@ -2,16 +2,18 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { resolveMediaUrl } from "@/lib/media";
 
 export function ProductGallery({ images, title }: { images: string[]; title: string }) {
   const [selected, setSelected] = useState(images[0]);
+  const selectedUrl = resolveMediaUrl(selected, { width: 1200, quality: 75, format: "webp" }) || "/file.svg";
 
   return (
     <div className="space-y-3">
       <div className="relative overflow-hidden bg-[#f3f3f3]">
         <div className="relative aspect-[4/5] w-full">
           <Image
-            src={selected}
+            src={selectedUrl}
             alt={title}
             fill
             className="object-cover"
@@ -21,7 +23,9 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
         </div>
       </div>
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-        {images.map((image) => (
+        {images.map((image) => {
+          const thumbUrl = resolveMediaUrl(image, { width: 240, quality: 70, format: "webp" }) || "/file.svg";
+          return (
           <button
             key={image}
             onClick={() => setSelected(image)}
@@ -32,9 +36,10 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
             }`}
             aria-label="Select product image"
           >
-            <Image src={image} alt={`${title} thumbnail`} fill className="object-cover" sizes="120px" />
+            <Image src={thumbUrl} alt={`${title} thumbnail`} fill className="object-cover" sizes="120px" />
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

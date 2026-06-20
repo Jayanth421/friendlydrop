@@ -14,6 +14,7 @@ import {
 } from "@/lib/firebase/firestore";
 import { ProductPageSectionId } from "@/types";
 import { formatCurrency } from "@/lib/utils";
+import { resolveMediaUrl } from "@/lib/media";
 
 export async function generateMetadata({ params }: { params: { productId: string } }): Promise<Metadata> {
   const product = await getProductById(params.productId);
@@ -25,7 +26,7 @@ export async function generateMetadata({ params }: { params: { productId: string
   const productUrl = `${appUrl}/products/${product.id}`;
   const title = product.seo?.metaTitle || product.name;
   const description = product.seo?.metaDescription || product.description.slice(0, 160);
-  const image = product.images[0];
+  const image = resolveMediaUrl(product.images[0], { width: 1200, quality: 75, format: "webp" });
 
   return {
     title,
@@ -70,6 +71,7 @@ export default async function ProductDetailPage({ params }: { params: { productI
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const productUrl = `${appUrl}/products/${product.id}`;
+  const primaryImage = resolveMediaUrl(product.images[0], { width: 1200, quality: 75, format: "webp" }) || "/file.svg";
   const encodedUrl = encodeURIComponent(productUrl);
   const encodedText = encodeURIComponent(`${product.name} - ${formatCurrency(product.price)}`);
   const shareLinks = {
@@ -130,7 +132,7 @@ export default async function ProductDetailPage({ params }: { params: { productI
             <ProductGallery images={product.images} title={product.name} />
           ) : (
             <div className="overflow-hidden rounded-xl border border-[#dddbdc] bg-white p-3">
-              <img src={product.images[0]} alt={product.name} className="h-auto w-full object-cover" />
+              <img src={primaryImage} alt={product.name} className="h-auto w-full object-cover" loading="lazy" />
             </div>
           )}
 

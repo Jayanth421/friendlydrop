@@ -1,33 +1,47 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { confirmPasswordReset } from "firebase/auth";
-import { firebaseAuth } from "@/lib/firebase/client";
+import { getFirebaseAuth } from "@/lib/firebase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export default function ResetPasswordPage() {
   const params = useSearchParams();
   const router = useRouter();
-  const oobCode = params.get("oobCode");
+  const [accessToken, setAccessToken] = useState(params.get("oobCode") ?? params.get("access_token") ?? "");
   const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    if (accessToken || typeof window === "undefined") {
+      return;
+    }
+
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const token = hashParams.get("oobCode") ?? hashParams.get("access_token");
+    if (token) {
+      setAccessToken(token);
+    }
+  }, [accessToken]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!oobCode) {
+    if (!accessToken) {
       toast.error("Invalid reset link");
       return;
     }
 
     try {
-      await confirmPasswordReset(firebaseAuth, oobCode, password);
+      const auth = getFirebaseAuth();
+      await confirmPasswordReset(auth, accessToken, password);
       toast.success("Password reset successful");
       router.push("/login");
-    } catch {
-      toast.error("Could not reset password");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not reset password. The link may have expired.");
     }
   };
 
@@ -43,3 +57,4 @@ export default function ResetPasswordPage() {
     </main>
   );
 }
+

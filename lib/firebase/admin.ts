@@ -1,46 +1,91 @@
-import admin from "firebase-admin";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { Firestore, getFirestore, initializeFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
-let app: admin.app.App;
+function getProjectId() {
+  return process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "";
+}
 
-function createAdminApp() {
-  if (admin.apps.length) {
-    return admin.app();
+function getClientEmail() {
+  return process.env.FIREBASE_CLIENT_EMAIL || "";
+}
+
+function getPrivateKey() {
+  return process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n") || "";
+}
+
+export function isFirebaseReady() {
+  return Boolean(getProjectId() && getClientEmail() && getPrivateKey());
+}
+
+function ensureFirebaseReady() {
+  if (!isFirebaseReady()) {
+    throw new Error(
+      "FIREBASE_NOT_CONFIGURED: set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.",
+    );
   }
-
-  const projectId = process.env.FIREBASE_PROJECT_ID ?? process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-
-  if (projectId && clientEmail && privateKey) {
-    return admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      }),
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    });
-  }
-
-  return admin.initializeApp({ projectId });
 }
 
 export function getAdminApp() {
-  if (!app) {
-    app = createAdminApp();
+  const existingApp = getApps()[0];
+  if (existingApp) {
+    return existingApp;
   }
 
-  return app;
+  ensureFirebaseReady();
+
+  return initializeApp({
+    credential: cert({
+      projectId: getProjectId(),
+      clientEmail: getClientEmail(),
+      privateKey: getPrivateKey(),
+    }),
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${getProjectId()}.appspot.com`,
+  });
 }
 
-export function getAdminAuth() {
-  return getAdminApp().auth();
+declare global {
+  var __friendlydropAdminDb: Firestore | undefined;
+}
+
+let _db: Firestore | null = globalThis.__friendlydropAdminDb ?? null;
+
+function applyFirestoreSettings(db: Firestore) {
+  try {
+    db.settings({ ignoreUndefinedProperties: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!message.includes("Firestore has already been initialized")) {
+      throw error;
+    }
+  }
 }
 
 export function getAdminDb() {
-  return getAdminApp().firestore();
+  if (!_db) {
+    const app = getAdminApp();
+
+    try {
+      _db = initializeFirestore(app);
+    } catch {
+      _db = getFirestore(app);
+    }
+
+    applyFirestoreSettings(_db);
+    globalThis.__friendlydropAdminDb = _db;
+  }
+  return _db;
+}
+
+export function getAdminAuth() {
+  return getAuth(getAdminApp());
 }
 
 export function getAdminStorage() {
-  return getAdminApp().storage();
+  return getStorage(getAdminApp());
+}
+
+export function getUserDisplayName(user: { name?: string; email?: string }) {
+  return user.name ?? user.email?.split("@")[0] ?? "Customer";
 }

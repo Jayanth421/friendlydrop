@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { ShopBrowser } from "@/components/product/shop-browser";
-import { getProducts, getStoreSettings } from "@/lib/firebase/firestore";
+import { getCmsPageBySlug, getProducts, getStoreSettings } from "@/lib/firebase/firestore";
 
 export const metadata: Metadata = {
   title: "Shop Products",
@@ -46,7 +46,7 @@ function normalizeBrands(brand?: string | string[]) {
 export default async function ProductsPage({ searchParams }: { searchParams: SearchParams }) {
   const brands = normalizeBrands(searchParams.brand);
 
-  const [products, allProducts, settings] = await Promise.all([
+  const [products, allProducts, settings, shopCmsPage] = await Promise.all([
     getProducts({
       search: searchParams.search,
       category: searchParams.category,
@@ -63,6 +63,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
     }),
     getProducts(),
     getStoreSettings(),
+    getCmsPageBySlug("shop"),
   ]);
 
   const maxPrice = allProducts.reduce((max, product) => Math.max(max, Number(product.price ?? 0)), 0);
@@ -96,7 +97,9 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
               : "all",
           minDiscount: searchParams.minDiscount ? Number(searchParams.minDiscount) : undefined,
         }}
+        cmsPage={shopCmsPage?.status === "published" ? shopCmsPage : null}
       />
     </main>
   );
 }
+

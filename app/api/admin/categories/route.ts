@@ -3,6 +3,7 @@ import { requireApiPermission } from "@/lib/auth/api";
 import { categorySchema } from "@/lib/validators";
 import { createCatalogCategory, getCatalogCategories } from "@/lib/enterprise";
 import { publishSystemEvent } from "@/lib/system-events";
+import { normalizeMediaReference } from "@/lib/media";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,10 @@ export async function POST(request: NextRequest) {
   try {
     const admin = await requireApiPermission(request, "catalog:manage");
     const payload = categorySchema.parse(await request.json());
-    const category = await createCatalogCategory(payload);
+    const category = await createCatalogCategory({
+      ...payload,
+      image: normalizeMediaReference(payload.image),
+    });
 
     await publishSystemEvent({
       type: "automation_rule_executed",

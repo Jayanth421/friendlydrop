@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth/api";
-import { getStoreSettings, getUserById } from "@/lib/firebase/firestore";
+import { getStoreSettings } from "@/lib/firebase/firestore";
+import { getUserById } from "@/lib/firebase/firestore";
 import { evaluateCheckoutControls } from "@/lib/settings-engine";
 
 export const runtime = "nodejs";
@@ -39,3 +40,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Could not fetch checkout config" }, { status: 400 });
   }
 }
+

@@ -7,6 +7,7 @@ import { Heart } from "lucide-react";
 import { Product } from "@/types";
 import { formatCurrency } from "@/lib/utils";
 import { useWishlistStore } from "@/store/use-wishlist-store";
+import { resolveMediaUrl } from "@/lib/media";
 
 export function ProductCard({
   product,
@@ -15,6 +16,7 @@ export function ProductCard({
   product: Product;
   variant?: "default" | "listing";
 }) {
+  const heroImage = resolveMediaUrl(product.images[0], { width: 800, quality: 75, format: "webp" }) || "/file.svg";
   const toggle = useWishlistStore((state) => state.toggle);
   const has = useWishlistStore((state) => state.has(product.id));
 
@@ -32,7 +34,7 @@ export function ProductCard({
       >
         <Link href={`/products/${product.id}`} className="relative block aspect-[3/4] overflow-hidden bg-[#f3f3f3]">
           <Image
-            src={product.images[0]}
+            src={heroImage}
             alt={product.name}
             fill
             sizes="(max-width: 768px) 50vw, (max-width: 1280px) 25vw, 22vw"
@@ -98,7 +100,7 @@ export function ProductCard({
     >
       <Link href={`/products/${product.id}`} className="relative block aspect-square overflow-hidden bg-[#f3f4f6]">
         <Image
-          src={product.images[0]}
+          src={heroImage}
           alt={product.name}
           fill
           sizes="(max-width: 768px) 50vw, (max-width: 1200px) 25vw, 20vw"

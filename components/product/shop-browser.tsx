@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Filter, Heart, Search, ShoppingBag, SlidersHorizontal } from "lucide-react";
-import { Product } from "@/types";
+import { CmsPageConfig, Product } from "@/types";
 import { ProductGrid } from "@/components/product/product-grid";
+import { resolveMediaUrl } from "@/lib/media";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type ShopSort = "popularity" | "price-asc" | "price-desc" | "newest";
 type Availability = "all" | "in-stock" | "out-of-stock";
@@ -102,16 +104,32 @@ function formatCategoryLabel(category?: string) {
     .join(" ");
 }
 
+function ProductGridSkeleton({ count = 8 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4 lg:gap-4">
+      {Array.from({ length: count }).map((_, index) => (
+        <div key={index} className="space-y-2 rounded-lg border border-slate-200 p-2">
+          <Skeleton className="aspect-[3/4] w-full rounded-md" />
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="h-4 w-2/5" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ShopBrowser({
   logoUrl,
   initialProducts,
   initialFacets,
   initialFilters,
+  cmsPage,
 }: {
   logoUrl?: string;
   initialProducts: Product[];
   initialFacets: ShopFacets;
   initialFilters: ShopFilters;
+  cmsPage?: CmsPageConfig | null;
 }) {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>(initialProducts);
@@ -122,6 +140,7 @@ export function ShopBrowser({
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [activeMobileFilterSection, setActiveMobileFilterSection] = useState<MobileFilterSection>("gender");
   const [mobileDraftFilters, setMobileDraftFilters] = useState<ShopFilters>(initialFilters);
+  const resolvedLogo = resolveMediaUrl(logoUrl, { width: 120, quality: 80, format: "webp" });
 
   useEffect(() => {
     const params = buildQuery(filters);
@@ -262,10 +281,10 @@ export function ShopBrowser({
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
-              {logoUrl ? (
+              {resolvedLogo ? (
                 <span
                   className="h-7 w-7 rounded-full border border-[#11121c] bg-contain bg-center bg-no-repeat"
-                  style={{ backgroundImage: `url(${logoUrl})` }}
+                  style={{ backgroundImage: `url(${resolvedLogo})` }}
                   aria-hidden="true"
                 />
               ) : (
@@ -296,7 +315,9 @@ export function ShopBrowser({
         </div>
 
         <div className="pb-[72px]">
-          {products.length ? (
+          {loading ? (
+            <ProductGridSkeleton count={8} />
+          ) : products.length ? (
             <ProductGrid products={products} variant="listing" />
           ) : (
             <div className="mx-3 mt-4 border border-dashed border-[#11121c] bg-white px-4 py-10 text-center text-sm text-[#11121c]">
@@ -470,10 +491,13 @@ export function ShopBrowser({
           <div className="border border-[#11121c] bg-white p-4">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <h1 className="text-3xl text-[#000000] md:text-4xl">Shop All Products</h1>
+                <h1 className="text-3xl text-[#000000] md:text-4xl">{cmsPage?.title || "Shop All Products"}</h1>
                 <p className="mt-1 text-xs uppercase tracking-[0.1em] text-[#11121c]">
                   {loading ? "Updating products..." : productCountLabel}
                 </p>
+                {cmsPage?.excerpt ? (
+                  <p className="mt-2 max-w-xl text-xs tracking-[0.08em] text-[#11121c]">{cmsPage.excerpt}</p>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select
@@ -509,7 +533,9 @@ export function ShopBrowser({
             </div>
           </div>
 
-          {products.length ? (
+          {loading ? (
+            <ProductGridSkeleton count={12} />
+          ) : products.length ? (
             <ProductGrid products={products} variant="listing" />
           ) : (
             <div className="border border-dashed border-[#11121c] bg-white p-8 text-center text-sm uppercase tracking-[0.08em] text-[#11121c]">

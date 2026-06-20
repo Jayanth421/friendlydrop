@@ -1,9 +1,9 @@
 import { nanoid } from "nanoid";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { getAdminDb, isFirebaseReady } from "@/lib/firebase/admin";
 import { EventSeverity, SystemEvent, SystemEventType } from "@/types";
 
 function isFirestoreReady() {
-  return Boolean(process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+  return isFirebaseReady();
 }
 
 function isMissingIndexError(error: unknown) {
@@ -23,7 +23,7 @@ function isMissingIndexError(error: unknown) {
   );
 }
 
-function mapDoc(doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot): SystemEvent {
+function mapDoc(doc: FirebaseFirestore.DocumentSnapshot): SystemEvent {
   return {
     id: doc.id,
     ...(doc.data() as Omit<SystemEvent, "id">),
@@ -111,3 +111,4 @@ export async function getSystemEventsSince(sinceIso: string, limit = 50): Promis
       .slice(0, limit);
   }
 }
+

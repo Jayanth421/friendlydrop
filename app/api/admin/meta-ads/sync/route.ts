@@ -37,3 +37,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Meta Ads catalog sync failed" }, { status: 400 });
   }
 }
+

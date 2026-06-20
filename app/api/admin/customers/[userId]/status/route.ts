@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api";
-import { updateUserStatus, getUserById } from "@/lib/firebase/firestore";
+import { getUserById, updateUserStatus } from "@/lib/firebase/firestore";
 import { userStatusSchema } from "@/lib/validators";
 import { logAdminActivity, logAdminAudit } from "@/lib/admin/logs";
 

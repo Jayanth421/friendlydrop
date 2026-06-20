@@ -13,17 +13,27 @@ import { Input } from "@/components/ui/input";
 
 declare global {
   interface Window {
-    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+    Cashfree: (options: { mode: "sandbox" | "production" }) => {
+      checkout: (options: { paymentSessionId: string; redirectTarget?: string }) => Promise<{ error?: { message: string }; redirect?: boolean }>;
+    };
   }
 }
 
-type PaymentMethod = "razorpay" | "stripe" | "upi-offline";
+type PaymentMethod = "cashfree" | "upi-offline";
+
+function buildClientIdempotencyKey(scope: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `${scope}:${crypto.randomUUID()}`;
+  }
+
+  return `${scope}:${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { items, subtotal, clearCart } = useCartStore();
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("razorpay");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cashfree");
   const [priority, setPriority] = useState<"express" | "normal">("normal");
   const [couponCode, setCouponCode] = useState("");
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -45,16 +55,14 @@ export default function CheckoutPage() {
         netBanking: true,
         cod: true,
         wallet: true,
-        razorpay: true,
-        stripe: true,
+        cashfree: true,
         paypal: false,
       },
       availableGateways: {
-        razorpay: true,
-        stripe: true,
+        cashfree: true,
         upi_offline: true,
       },
-      fallbackGateway: "razorpay" as "razorpay" | "stripe" | "upi_offline",
+      fallbackGateway: "cashfree" as "cashfree" | "razorpay" | "stripe" | "upi_offline",
       message: "",
     },
     operations: {
@@ -114,16 +122,18 @@ export default function CheckoutPage() {
               netBanking: Boolean(data.config.payments?.availableMethods?.netBanking ?? true),
               cod: Boolean(data.config.payments?.availableMethods?.cod ?? true),
               wallet: Boolean(data.config.payments?.availableMethods?.wallet ?? true),
+              cashfree: Boolean(data.config.payments?.availableMethods?.cashfree ?? true),
               razorpay: Boolean(data.config.payments?.availableMethods?.razorpay ?? true),
               stripe: Boolean(data.config.payments?.availableMethods?.stripe ?? true),
               paypal: Boolean(data.config.payments?.availableMethods?.paypal ?? false),
             },
             availableGateways: {
+              cashfree: Boolean(data.config.payments?.availableGateways?.cashfree ?? true),
               razorpay: Boolean(data.config.payments?.availableGateways?.razorpay ?? true),
               stripe: Boolean(data.config.payments?.availableGateways?.stripe ?? true),
               upi_offline: Boolean(data.config.payments?.availableGateways?.upi_offline ?? true),
             },
-            fallbackGateway: (data.config.payments?.fallbackGateway ?? "razorpay") as "razorpay" | "stripe" | "upi_offline",
+            fallbackGateway: (data.config.payments?.fallbackGateway ?? "cashfree") as "cashfree" | "razorpay" | "stripe" | "upi_offline",
             message: data.config.payments?.message ?? "",
           },
           operations: {
@@ -136,19 +146,14 @@ export default function CheckoutPage() {
 
         setPaymentMethod((current) => {
           if (
-            (current === "razorpay" && nextConfig.payments.availableGateways.razorpay) ||
-            (current === "stripe" && nextConfig.payments.availableGateways.stripe) ||
+            (current === "cashfree" && nextConfig.payments.availableGateways.cashfree) ||
             (current === "upi-offline" && nextConfig.payments.availableGateways.upi_offline)
           ) {
             return current;
           }
 
-          if (nextConfig.payments.availableGateways.razorpay) {
-            return "razorpay";
-          }
-
-          if (nextConfig.payments.availableGateways.stripe) {
-            return "stripe";
+          if (nextConfig.payments.availableGateways.cashfree) {
+            return "cashfree";
           }
 
           if (nextConfig.payments.availableGateways.upi_offline) {
@@ -210,6 +215,9 @@ export default function CheckoutPage() {
 
       const response = await fetch("/api/uploads", {
         method: "POST",
+        headers: {
+          "Idempotency-Key": `upload:upi-proof:${file.name}:${file.size}:${file.lastModified}`,
+        },
         body: formData,
       });
 
@@ -253,58 +261,32 @@ export default function CheckoutPage() {
     toast.success("Coupon applied");
   };
 
-  const handleRazorpay = async (orderDraft: Record<string, unknown>) => {
+  const handleCashfree = async (orderDraft: Record<string, unknown>) => {
+    const checkoutRequestKey = buildClientIdempotencyKey("checkout:create-order:cashfree");
     const createOrderResponse = await fetch("/api/create-order", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": checkoutRequestKey,
+      },
       body: JSON.stringify(orderDraft),
     });
 
     const createOrderData = await createOrderResponse.json();
 
     if (!createOrderResponse.ok) {
-      toast.error(createOrderData.error ?? "Could not create payment");
+      toast.error(createOrderData.error ?? "Could not create payment session");
       return;
     }
 
-    const razorpay = new window.Razorpay({
-      key: createOrderData.key,
-      amount: createOrderData.amount,
-      currency: createOrderData.currency,
-      order_id: createOrderData.razorpayOrderId,
-      name: "FriendlyDrop",
-      description: "Custom photo products",
-      prefill: {
-        name: address.fullName,
-        email: user?.email,
-        contact: address.phone,
-      },
-      handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
-        const verifyResponse = await fetch("/api/verify-payment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            razorpayOrderId: response.razorpay_order_id,
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpaySignature: response.razorpay_signature,
-            orderDraft,
-          }),
-        });
-
-        const verifyData = await verifyResponse.json();
-
-        if (!verifyResponse.ok) {
-          toast.error(verifyData.error ?? "Payment verification failed");
-          return;
-        }
-
-        clearCart();
-        toast.success("Order confirmed");
-        router.push(`/orders/${verifyData.order.id}`);
-      },
+    const cashfree = window.Cashfree({
+      mode: createOrderData.isSandbox ? "sandbox" : "production",
     });
 
-    razorpay.open();
+    await cashfree.checkout({
+      paymentSessionId: createOrderData.paymentSessionId,
+      redirectTarget: "_self",
+    });
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -321,8 +303,7 @@ export default function CheckoutPage() {
     }
 
     if (
-      !pricingConfig.payments.availableGateways.razorpay &&
-      !pricingConfig.payments.availableGateways.stripe &&
+      !pricingConfig.payments.availableGateways.cashfree &&
       !pricingConfig.payments.availableGateways.upi_offline
     ) {
       toast.error(pricingConfig.payments.message || "No payment option is available right now.");
@@ -345,26 +326,15 @@ export default function CheckoutPage() {
     };
 
     try {
-      if (paymentMethod === "razorpay") {
-        await handleRazorpay(orderDraft);
-      } else if (paymentMethod === "stripe") {
-        const response = await fetch("/api/create-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(orderDraft),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.url) {
-          throw new Error(data.error ?? "Unable to start Stripe checkout");
-        }
-
-        window.location.href = data.url;
+      if (paymentMethod === "cashfree") {
+        await handleCashfree(orderDraft);
       } else {
         const response = await fetch("/api/payments/upi", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": `upi:${upiTransactionId.trim() || upiProofImageUrl}`,
+          },
           body: JSON.stringify({
             orderDraft,
             upiVpa: upiId,
@@ -413,26 +383,16 @@ export default function CheckoutPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="text-lg font-semibold text-ink">Payment Method</h2>
           {pricingConfig.payments.message ? <p className="mt-2 text-xs text-amber-600">{pricingConfig.payments.message}</p> : null}
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <label className="inline-flex items-center gap-2 text-sm">
               <input
                 type="radio"
                 name="paymentMethod"
-                checked={paymentMethod === "razorpay"}
-                onChange={() => setPaymentMethod("razorpay")}
-                disabled={!pricingConfig.payments.availableGateways.razorpay}
+                checked={paymentMethod === "cashfree"}
+                onChange={() => setPaymentMethod("cashfree")}
+                disabled={!pricingConfig.payments.availableGateways.cashfree}
               />
-              Razorpay
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="paymentMethod"
-                checked={paymentMethod === "stripe"}
-                onChange={() => setPaymentMethod("stripe")}
-                disabled={!pricingConfig.payments.availableGateways.stripe}
-              />
-              Stripe
+              Cashfree Payments
             </label>
             <label className="inline-flex items-center gap-2 text-sm">
               <input
@@ -525,8 +485,7 @@ export default function CheckoutPage() {
             pricingConfig.operations.maintenanceMode ||
             !pricingConfig.operations.checkoutEnabled ||
             !pricingConfig.delivery.allowed ||
-            (!pricingConfig.payments.availableGateways.razorpay &&
-              !pricingConfig.payments.availableGateways.stripe &&
+            (!pricingConfig.payments.availableGateways.cashfree &&
               !pricingConfig.payments.availableGateways.upi_offline)
           }
         >

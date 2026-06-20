@@ -1,11 +1,11 @@
 import { nanoid } from "nanoid";
 import { createSlug } from "@/lib/utils";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { getAdminDb, isFirebaseReady } from "@/lib/firebase/admin";
 import { getAllOrders, getAllUsers, getMarketingCampaigns, getProducts, getSupportTickets, getTransactions } from "@/lib/firebase/firestore";
 import { BannerItem, CatalogCategory, UserProfile, VendorPayout, VendorProfile } from "@/types";
 
 function isFirestoreReady() {
-  return Boolean(process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+  return isFirebaseReady();
 }
 
 function mapDoc<T>(doc: FirebaseFirestore.DocumentSnapshot): T {
@@ -335,3 +335,4 @@ export async function getMarketingInsights() {
     activeBanners: banners.filter((banner) => banner.active),
   };
 }
+

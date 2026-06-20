@@ -1,39 +1,21 @@
 import { requireAdminPermission } from "@/lib/auth/session";
 import { getProducts } from "@/lib/firebase/firestore";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { InventoryTable } from "./inventory-table";
 
 export default async function AdminInventoryPage() {
   await requireAdminPermission("inventory:manage");
   const products = await getProducts();
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Inventory Management</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Product</TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead>Stock</TableHead>
-              <TableHead>Low stock alert</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {products.map((product) => (
-              <TableRow key={product.id}>
-                <TableCell>{product.name}</TableCell>
-                <TableCell>{product.sku ?? "-"}</TableCell>
-                <TableCell>{product.stock}</TableCell>
-                <TableCell>{product.stock <= 10 ? "Low" : "Healthy"}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-stone-900">Inventory Management</h1>
+        <p className="mt-1 text-sm text-stone-500">Monitor stock levels, set low-stock thresholds, and perform inline or bulk quantity updates.</p>
+      </div>
+
+      {/* Main Inventory Manager table component */}
+      <InventoryTable products={products} />
+    </div>
   );
 }

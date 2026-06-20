@@ -1,11 +1,12 @@
 import { EverlaneHome } from "@/components/home/everlane-home";
-import { getFeaturedProducts, getProducts } from "@/lib/firebase/firestore";
+import { getCmsPageBySlug, getFeaturedProducts, getProducts } from "@/lib/firebase/firestore";
 
 export default async function HomePage() {
-  const [featuredProducts, latestProducts, allProducts] = await Promise.all([
+  const [featuredProducts, latestProducts, allProducts, homeCmsPage] = await Promise.all([
     getFeaturedProducts(),
     getProducts({ sort: "newest" }),
     getProducts(),
+    getCmsPageBySlug("home"),
   ]);
 
   return (
@@ -13,6 +14,8 @@ export default async function HomePage() {
       featuredProducts={featuredProducts}
       latestProducts={latestProducts}
       allProducts={allProducts}
+      cmsPage={homeCmsPage?.status === "published" ? homeCmsPage : null}
     />
   );
 }
+

@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
-import { firebaseDb } from "@/lib/firebase/client";
 import { Order } from "@/types";
 
 export function useOrderTracking(orderId: string, initialOrder: Order) {
@@ -13,15 +11,31 @@ export function useOrderTracking(orderId: string, initialOrder: Order) {
       return;
     }
 
-    const unsubscribe = onSnapshot(doc(firebaseDb, "orders", orderId), (snapshot) => {
-      if (!snapshot.exists()) {
-        return;
+    let cancelled = false;
+
+    async function refreshOrder() {
+      try {
+        const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as { order?: Order };
+        if (!cancelled && data.order) {
+          setOrder(data.order);
+        }
+      } catch {
+        // Keep the last known order state if the network refresh fails.
       }
+    }
 
-      setOrder({ id: snapshot.id, ...(snapshot.data() as Omit<Order, "id">) });
-    });
+    refreshOrder();
+    const interval = window.setInterval(refreshOrder, 15_000);
 
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
   }, [orderId]);
 
   return order;

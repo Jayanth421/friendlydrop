@@ -4,34 +4,27 @@ import { createOrderSchema, couponValidationSchema } from "@/lib/validators";
 import { getCouponByCode, getProductById, getStoreSettings, getUserById } from "@/lib/firebase/firestore";
 import { getRazorpayInstance } from "@/lib/payments/razorpay";
 import { getStripeInstance } from "@/lib/payments/stripe";
+import { createCashfreeOrder } from "@/lib/payments/cashfree";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { nanoid } from "nanoid";
 import { calculateCheckoutSummary } from "@/lib/checkout-pricing";
 import { publishSystemEvent } from "@/lib/system-events";
 import { canUseGateway, calculateDeliveryQuote, evaluateCheckoutControls } from "@/lib/settings-engine";
+import { beginIdempotentRequest, completeIdempotentRequest, failIdempotentRequest } from "@/lib/security/idempotency";
+import { assertRateLimit, buildRateLimitKey } from "@/lib/security/rate-limit";
+import { assertTrustedMutationRequest, toGuardErrorResponse } from "@/lib/security/request-guards";
 
 export const runtime = "nodejs";
 
 async function buildSecureItems(items: Array<{ productId: string; quantity: number; customImageUrl?: string }>) {
-  const secureItems: Array<{
-    productId: string;
-    name: string;
-    price: number;
-    quantity: number;
-    image: string;
-    category: string;
-    weightKg: number;
-    customImageUrl?: string;
-  }> = [];
+  const products = await Promise.all(items.map((item) => getProductById(item.productId)));
 
-  for (const item of items) {
-    const product = await getProductById(item.productId);
-
+  return products.map((product, i) => {
     if (!product) {
       throw new Error("PRODUCT_NOT_FOUND");
     }
-
-    secureItems.push({
+    const item = items[i];
+    return {
       productId: product.id,
       name: product.name,
       price: product.price,
@@ -40,10 +33,8 @@ async function buildSecureItems(items: Array<{ productId: string; quantity: numb
       category: product.category,
       weightKg: Math.max(Number(product.weightGrams ?? 500) / 1000, 0.1),
       customImageUrl: item.customImageUrl,
-    });
-  }
-
-  return secureItems;
+    };
+  });
 }
 
 async function calculateTotal(
@@ -53,24 +44,30 @@ async function calculateTotal(
     couponCode?: string;
     priority?: "normal" | "express";
     address: { postalCode?: string; city?: string };
-    paymentMethod: "razorpay" | "stripe";
+    paymentMethod: "cashfree" | "razorpay" | "stripe";
   },
 ) {
   const secureItems = await buildSecureItems(input.items);
   const subtotal = secureItems.reduce((total, item) => total + item.price * item.quantity, 0);
+
+  const couponPromise = input.couponCode
+    ? getCouponByCode(couponValidationSchema.parse({ code: input.couponCode }).code)
+    : Promise.resolve(null);
+
+  const [settings, profile, coupon] = await Promise.all([
+    getStoreSettings(),
+    getUserById(input.userId),
+    couponPromise,
+  ]);
+
   let discountAmount = 0;
-
-  if (input.couponCode) {
-    const normalized = couponValidationSchema.parse({ code: input.couponCode }).code;
-    const coupon = await getCouponByCode(normalized);
-    const isExpired = coupon?.expiresAt ? new Date(coupon.expiresAt).getTime() < Date.now() : false;
-
-    if (coupon && coupon.active && !isExpired) {
+  if (coupon) {
+    const isExpired = coupon.expiresAt ? new Date(coupon.expiresAt).getTime() < Date.now() : false;
+    if (coupon.active && !isExpired) {
       discountAmount = coupon.type === "percent" ? Math.round((subtotal * coupon.value) / 100) : coupon.value;
     }
   }
 
-  const [settings, profile] = await Promise.all([getStoreSettings(), getUserById(input.userId)]);
   const isFirstOrder = (profile?.orderCount ?? 0) === 0;
   const deliveryQuote = calculateDeliveryQuote(settings, {
     subtotal: Math.max(subtotal - discountAmount, 0),
@@ -91,7 +88,7 @@ async function calculateTotal(
     speed: input.priority === "express" ? "express" : "standard",
   });
 
-  let selectedGateway: "razorpay" | "stripe" = input.paymentMethod;
+  let selectedGateway: "cashfree" | "razorpay" | "stripe" = input.paymentMethod;
   if (!gatewayCheck.allowed) {
     const checkoutControls = evaluateCheckoutControls(settings, {
       subtotal,
@@ -105,7 +102,7 @@ async function calculateTotal(
     });
 
     const fallbackGateway = checkoutControls.payments.fallbackGateway;
-    const fallback = fallbackGateway === "razorpay" || fallbackGateway === "stripe" ? fallbackGateway : undefined;
+    const fallback = fallbackGateway === "cashfree" || fallbackGateway === "razorpay" || fallbackGateway === "stripe" ? fallbackGateway : undefined;
     const shouldFallback =
       settings.payments.rules.smartFallbackEnabled &&
       fallback &&
@@ -152,20 +149,52 @@ async function calculateTotal(
     deliveryQuote,
     checkoutControls,
     selectedGateway,
+    settings,
     ...summary,
   };
 }
 
 export async function POST(request: NextRequest) {
+  let actorId = "anonymous";
+  let idempotencyKey: string | null = request.headers.get("Idempotency-Key");
   try {
     const user = await requireApiUser(request);
+    actorId = user.uid;
+    assertTrustedMutationRequest(request);
+    assertRateLimit({
+      key: buildRateLimitKey({ request, scope: "checkout:create-order", actorId: user.uid }),
+      max: 8,
+      windowMs: 60_000,
+    });
+
+    const idempotency = await beginIdempotentRequest({
+      scope: "checkout:create-order",
+      actorId: user.uid,
+      key: idempotencyKey,
+    });
+    idempotencyKey = idempotency.key ?? idempotencyKey;
+
+    if (idempotency.mode === "replay") {
+      return NextResponse.json(idempotency.responseBody, { status: idempotency.responseStatus });
+    }
+
+    if (idempotency.mode === "in_progress") {
+      return NextResponse.json({ error: "Checkout request already in progress" }, { status: 409 });
+    }
+
     const payload = createOrderSchema.parse(await request.json());
 
     if (payload.paymentMethod === "upi-offline") {
+      await failIdempotentRequest({
+        scope: "checkout:create-order",
+        actorId: user.uid,
+        key: idempotencyKey,
+        errorMessage: "invalid_payment_method",
+      });
       return NextResponse.json({ error: "Use /api/payments/upi for offline UPI submissions" }, { status: 400 });
     }
 
-    const totals = await calculateTotal({
+    const { settings, ...totals } = await calculateTotal({
       userId: user.uid,
       items: payload.items,
       couponCode: payload.couponCode,
@@ -174,7 +203,7 @@ export async function POST(request: NextRequest) {
         postalCode: payload.address.postalCode,
         city: payload.address.city,
       },
-      paymentMethod: payload.paymentMethod as "razorpay" | "stripe",
+      paymentMethod: payload.paymentMethod as "cashfree" | "razorpay" | "stripe",
     });
 
     await publishSystemEvent({
@@ -194,6 +223,57 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    if (totals.selectedGateway === "cashfree") {
+      const pendingOrderId = nanoid(14);
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+      await getAdminDb().collection("pendingOrders").doc(pendingOrderId).set({
+        id: pendingOrderId,
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.name,
+        orderDraft: {
+          ...payload,
+          paymentMethod: totals.selectedGateway,
+          items: totals.secureItems,
+        },
+        totals,
+        createdAt: new Date().toISOString(),
+      });
+
+      const cashfreeOrder = await createCashfreeOrder(
+        {
+          orderId: pendingOrderId,
+          amount: totals.total,
+          customerName: payload.address.fullName || user.name || "Customer",
+          customerEmail: user.email || "noreply@friendlydrop.in",
+          customerPhone: payload.address.phone || "9999999999",
+          userId: user.uid,
+          returnUrl: `${appUrl}/checkout/cashfree-return?order_id=${pendingOrderId}`,
+        },
+        settings,
+      );
+
+      const responseBody = {
+        provider: "cashfree",
+        paymentSessionId: cashfreeOrder.paymentSessionId,
+        cfOrderId: cashfreeOrder.cfOrderId,
+        orderId: pendingOrderId,
+        isSandbox: settings.payments.cashfreeSandboxMode ?? true,
+        amount: totals.total,
+      };
+
+      await completeIdempotentRequest({
+        scope: "checkout:create-order",
+        actorId: user.uid,
+        key: idempotencyKey,
+        responseStatus: 200,
+        responseBody,
+      });
+
+      return NextResponse.json(responseBody);
+    }
+
     if (totals.selectedGateway === "razorpay") {
       const razorpayOrder = await getRazorpayInstance().orders.create({
         amount: totals.total * 100,
@@ -204,13 +284,23 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return NextResponse.json({
+      const responseBody = {
         provider: "razorpay",
         key: process.env.RAZORPAY_KEY_ID,
         razorpayOrderId: razorpayOrder.id,
         amount: razorpayOrder.amount,
         currency: razorpayOrder.currency,
+      };
+
+      await completeIdempotentRequest({
+        scope: "checkout:create-order",
+        actorId: user.uid,
+        key: idempotencyKey,
+        responseStatus: 200,
+        responseBody,
       });
+
+      return NextResponse.json(responseBody);
     }
 
     const pendingOrderId = nanoid(14);
@@ -255,9 +345,32 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ provider: "stripe", url: session.url });
+    const responseBody = { provider: "stripe", url: session.url };
+
+    await completeIdempotentRequest({
+      scope: "checkout:create-order",
+      actorId: user.uid,
+      key: idempotencyKey,
+      responseStatus: 200,
+      responseBody,
+    });
+
+    return NextResponse.json(responseBody);
   } catch (error) {
+    const guardError = toGuardErrorResponse(error);
+    if (guardError) {
+      return guardError;
+    }
+    if (error instanceof Error && error.message !== "RATE_LIMITED") {
+      await failIdempotentRequest({
+        scope: "checkout:create-order",
+        actorId,
+        key: idempotencyKey,
+        errorMessage: error.message,
+      }).catch(() => undefined);
+    }
     console.error(error);
     return NextResponse.json({ error: "Could not create order" }, { status: 400 });
   }
 }
+

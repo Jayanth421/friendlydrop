@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { ComponentType } from "react";
 import { requireUser } from "@/lib/auth/session";
-import { getUserById, getUserOrders, getUserTransactions, getWishlist } from "@/lib/firebase/firestore";
+import { getUserById } from "@/lib/firebase/firestore";
+import { getUserOrders, getUserTransactions, getWishlist } from "@/lib/firebase/firestore";
 import {
   BadgeIndianRupee,
   ChevronRight,
@@ -103,3 +104,4 @@ function AccountMenuItem({
     </Link>
   );
 }
+

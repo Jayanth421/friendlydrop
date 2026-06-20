@@ -130,3 +130,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Could not confirm stripe order" }, { status: 400 });
   }
 }
+

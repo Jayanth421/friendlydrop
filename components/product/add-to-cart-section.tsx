@@ -45,6 +45,9 @@ export function AddToCartSection({ product }: { product: Product }) {
 
       const uploadResponse = await fetch("/api/uploads", {
         method: "POST",
+        headers: {
+          "Idempotency-Key": `upload:custom:${file.name}:${file.size}:${file.lastModified}`,
+        },
         body: formData,
       });
 

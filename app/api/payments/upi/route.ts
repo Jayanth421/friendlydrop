@@ -2,10 +2,22 @@ import { nanoid } from "nanoid";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth/api";
 import { couponValidationSchema, upiOfflinePaymentSchema } from "@/lib/validators";
-import { createOrder, getCouponByCode, getProductById, getStoreSettings, getUserById, saveCart } from "@/lib/firebase/firestore";
+import {
+  createOrder,
+  getCouponByCode,
+  getOrder,
+  getProductById,
+  getStoreSettings,
+  getTransactionByProofTransactionId,
+  saveCart,
+} from "@/lib/firebase/firestore";
+import { getUserById } from "@/lib/firebase/firestore";
 import { calculateCheckoutSummary } from "@/lib/checkout-pricing";
 import { calculateDeliveryQuote, canUseGateway } from "@/lib/settings-engine";
 import { publishSystemEvent } from "@/lib/system-events";
+import { beginIdempotentRequest, completeIdempotentRequest, failIdempotentRequest } from "@/lib/security/idempotency";
+import { assertRateLimit, buildRateLimitKey } from "@/lib/security/rate-limit";
+import { assertTrustedMutationRequest, toGuardErrorResponse } from "@/lib/security/request-guards";
 
 export const runtime = "nodejs";
 
@@ -104,12 +116,66 @@ async function calculateTotal(input: {
 }
 
 export async function POST(request: NextRequest) {
+  let actorId = "anonymous";
+  let idempotencyKey: string | null = request.headers.get("Idempotency-Key");
   try {
     const user = await requireApiUser(request);
+    actorId = user.uid;
+    assertTrustedMutationRequest(request);
+    assertRateLimit({
+      key: buildRateLimitKey({ request, scope: "payments:upi-offline", actorId: user.uid }),
+      max: 6,
+      windowMs: 60_000,
+    });
     const payload = upiOfflinePaymentSchema.parse(await request.json());
+    idempotencyKey = idempotencyKey || `upi:${payload.transactionId?.trim() || payload.proofImageUrl}`;
+
+    const idempotency = await beginIdempotentRequest({
+      scope: "payments:upi-offline",
+      actorId: user.uid,
+      key: idempotencyKey,
+    });
+
+    if (idempotency.mode === "replay") {
+      return NextResponse.json(idempotency.responseBody, { status: idempotency.responseStatus });
+    }
+
+    if (idempotency.mode === "in_progress") {
+      return NextResponse.json({ error: "UPI proof submission already in progress" }, { status: 409 });
+    }
 
     if (payload.orderDraft.paymentMethod !== "upi-offline") {
+      await failIdempotentRequest({
+        scope: "payments:upi-offline",
+        actorId: user.uid,
+        key: idempotencyKey,
+        errorMessage: "invalid_payment_method",
+      });
       return NextResponse.json({ error: "Invalid payment method for UPI route" }, { status: 400 });
+    }
+
+    const normalizedTransactionId = payload.transactionId?.trim();
+    if (normalizedTransactionId) {
+      const existingTransaction = await getTransactionByProofTransactionId(normalizedTransactionId);
+      if (existingTransaction) {
+        const existingOrder = await getOrder(existingTransaction.orderId);
+        if (existingOrder) {
+          const responseBody = {
+            ok: true,
+            order: existingOrder,
+            message: "UPI payment proof already submitted.",
+            replayed: true,
+          };
+          await completeIdempotentRequest({
+            scope: "payments:upi-offline",
+            actorId: user.uid,
+            key: idempotencyKey,
+            responseStatus: 200,
+            responseBody,
+          });
+          return NextResponse.json(responseBody);
+        }
+      }
     }
 
     const totals = await calculateTotal({
@@ -123,7 +189,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const generatedPaymentId = payload.transactionId?.trim() || `UPI-${Date.now()}-${nanoid(5)}`;
+    const generatedPaymentId = normalizedTransactionId || `UPI-${Date.now()}-${nanoid(5)}`;
     const order = await createOrder({
       userId: user.uid,
       items: totals.secureItems,
@@ -142,7 +208,7 @@ export async function POST(request: NextRequest) {
         provider: "upi_offline",
         paymentId: generatedPaymentId,
         orderId: `upi-${Date.now()}`,
-        transactionId: payload.transactionId?.trim() || undefined,
+        transactionId: normalizedTransactionId || undefined,
         status: "pending",
         proofImageUrl: payload.proofImageUrl,
         proofStatus: "pending",
@@ -165,13 +231,34 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
+    const responseBody = {
       ok: true,
       order,
       message: "UPI payment proof submitted. Your order is pending admin verification.",
+    };
+
+    await completeIdempotentRequest({
+      scope: "payments:upi-offline",
+      actorId: user.uid,
+      key: idempotencyKey,
+      responseStatus: 200,
+      responseBody,
     });
+
+    return NextResponse.json(responseBody);
   } catch (error) {
+    const guardError = toGuardErrorResponse(error);
+    if (guardError) {
+      return guardError;
+    }
+    await failIdempotentRequest({
+      scope: "payments:upi-offline",
+      actorId,
+      key: idempotencyKey,
+      errorMessage: error instanceof Error ? error.message : "upi_submission_failed",
+    }).catch(() => undefined);
     console.error(error);
     return NextResponse.json({ error: "Could not submit UPI payment proof" }, { status: 400 });
   }
 }
+

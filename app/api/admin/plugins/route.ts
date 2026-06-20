@@ -25,3 +25,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Could not install plugin" }, { status: 400 });
   }
 }
+

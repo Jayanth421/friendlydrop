@@ -2,17 +2,15 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
-  User,
-  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
   sendPasswordResetEmail,
-  updateProfile,
+  signInWithEmailAndPassword,
+  signOut,
+  type User,
 } from "firebase/auth";
-import { firebaseAuth } from "@/lib/firebase/client";
+import {
+  getFirebaseAuth,
+} from "@/lib/firebase/client";
 import { UserRole } from "@/types";
 
 type AuthContextValue = {
@@ -21,7 +19,6 @@ type AuthContextValue = {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, phone?: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
 };
@@ -38,7 +35,7 @@ function getSessionRouteHint(response: Response) {
   }
 
   if (response.status >= 500) {
-    return "Auth API is reachable but failing on the server. Check server logs and Firebase admin env vars.";
+    return "Auth API is reachable but failing on the server. Check server logs and Firebase env vars.";
   }
 
   return null;
@@ -67,14 +64,12 @@ async function readErrorMessage(response: Response) {
   return [message ?? fallback, hint].filter(Boolean).join(" ");
 }
 
-async function syncSession(user: User | null, options?: { phone?: string }) {
-  if (user) {
-    const idToken = await user.getIdToken(true);
+const auth = getFirebaseAuth();
 
+async function syncSession(idToken: string | null, options?: { phone?: string }) {
+  if (idToken) {
     const body: { idToken: string; phone?: string } = { idToken };
-    if (options?.phone) {
-      body.phone = options.phone;
-    }
+    if (options?.phone) body.phone = options.phone;
 
     const response = await fetch("/api/auth/session", {
       method: "POST",
@@ -104,39 +99,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
-      setUser(firebaseUser);
-
+    return onAuthStateChanged(auth, async (currentUser) => {
       try {
-        await syncSession(firebaseUser);
-      } catch (error) {
-        console.error(error);
+        setUser(currentUser);
 
-        if (firebaseUser) {
-          await signOut(firebaseAuth).catch(() => undefined);
-          setUser(null);
+        if (!currentUser) {
+          await syncSession(null).catch(() => undefined);
+          setRole("user");
+          return;
         }
 
-        setRole("user");
-        setLoading(false);
-        return;
-      }
+        const idToken = await currentUser.getIdToken();
+        await syncSession(idToken);
 
-      if (firebaseUser) {
         const response = await fetch("/api/me", { cache: "no-store" });
-
         if (response.ok) {
           const data = await response.json();
           setRole(data.user.role as UserRole);
         }
-      } else {
+      } catch (error) {
+        console.error(error);
+        setUser(null);
         setRole("user");
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     });
-
-    return () => unsub();
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -145,41 +133,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       loading,
       login: async (email, password) => {
-        try {
-          const cred = await signInWithEmailAndPassword(firebaseAuth, email, password);
-          await syncSession(cred.user);
-        } catch (error) {
-          await signOut(firebaseAuth).catch(() => undefined);
-          throw error;
+        const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+        const idToken = await credential.user.getIdToken();
+        await syncSession(idToken);
+        setUser(credential.user);
+        const response = await fetch("/api/me", { cache: "no-store" });
+        if (response.ok) {
+          const data = await response.json();
+          setRole(data.user.role as UserRole);
         }
       },
       signup: async (name, email, password, phone) => {
-        try {
-          const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
-          await updateProfile(cred.user, { displayName: name });
-          await syncSession(cred.user, { phone });
-        } catch (error) {
-          await signOut(firebaseAuth).catch(() => undefined);
-          throw error;
+        const signupResponse = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password, phone }),
+        });
+
+        if (!signupResponse.ok) {
+          const message = await readErrorMessage(signupResponse);
+          throw new Error(message);
         }
-      },
-      loginWithGoogle: async () => {
-        try {
-          const cred = await signInWithPopup(firebaseAuth, new GoogleAuthProvider());
-          await syncSession(cred.user);
-        } catch (error) {
-          await signOut(firebaseAuth).catch(() => undefined);
-          throw error;
+
+        const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+        const idToken = await credential.user.getIdToken();
+        await syncSession(idToken, { phone });
+        setUser(credential.user);
+        const meResponse = await fetch("/api/me", { cache: "no-store" });
+        if (meResponse.ok) {
+          const data = await meResponse.json();
+          setRole(data.user.role as UserRole);
         }
       },
       logout: async () => {
-        await signOut(firebaseAuth);
+        await signOut(auth);
         await syncSession(null);
+        setUser(null);
+        setRole("user");
       },
       forgotPassword: async (email) => {
-        await sendPasswordResetEmail(firebaseAuth, email.trim(), {
-          url: `${window.location.origin}/login`,
-        });
+        await sendPasswordResetEmail(auth, email.trim(), { url: `${window.location.origin}/reset-password` });
       },
     }),
     [loading, role, user],

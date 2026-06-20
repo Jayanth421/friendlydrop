@@ -1,7 +1,8 @@
 import PDFDocument from "pdfkit";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api";
-import { getOrder, getUserById } from "@/lib/firebase/firestore";
+import { getOrder } from "@/lib/firebase/firestore";
+import { getUserById } from "@/lib/firebase/firestore";
 
 export const runtime = "nodejs";
 

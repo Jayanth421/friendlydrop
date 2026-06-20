@@ -1,13 +1,11 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useState } from "react";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { toast } from "sonner";
 import { PluginApp } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { firebaseStorage } from "@/lib/firebase/client";
 
 export function PluginManager({ initialPlugins }: { initialPlugins: PluginApp[] }) {
   const [plugins, setPlugins] = useState(initialPlugins);
@@ -40,15 +38,31 @@ export function PluginManager({ initialPlugins }: { initialPlugins: PluginApp[] 
 
     setUploadingZip(true);
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const storageRef = ref(firebaseStorage, `plugin-zips/${Date.now()}-${safeName}`);
-      await uploadBytes(storageRef, file, { contentType: "application/zip" });
-      const url = await getDownloadURL(storageRef);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "custom-uploads");
+      formData.append("record", "true");
+
+      const response = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Could not upload plugin zip.");
+      }
+
+      const url = payload.mediaUrl ?? payload.imageUrl;
+      if (!url) {
+        throw new Error("Upload completed but no file URL was returned.");
+      }
+
       setForm((prev) => ({ ...prev, zipFileUrl: url }));
       toast.success("Plugin zip uploaded.");
     } catch (error) {
       console.error(error);
-      toast.error("Could not upload plugin zip.");
+      toast.error(error instanceof Error ? error.message : "Could not upload plugin zip.");
     } finally {
       setUploadingZip(false);
       event.target.value = "";

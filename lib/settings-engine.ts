@@ -369,6 +369,10 @@ export function calculateDeliveryQuote(settings: StoreSettings, input: DeliveryQ
 }
 
 function gatewayEnabled(settings: StoreSettings, gateway: PaymentProvider) {
+  if (gateway === "cashfree") {
+    return settings.payments.methods.cashfree ?? false;
+  }
+
   if (gateway === "razorpay") {
     return settings.payments.methods.razorpay;
   }
@@ -381,6 +385,10 @@ function gatewayEnabled(settings: StoreSettings, gateway: PaymentProvider) {
 }
 
 function getFallbackGateway(availableGateways: Record<PaymentProvider, boolean>) {
+  if (availableGateways.cashfree) {
+    return "cashfree";
+  }
+
   if (availableGateways.razorpay) {
     return "razorpay";
   }
@@ -422,9 +430,10 @@ export function evaluateCheckoutControls(
 
   const paymentEnabled = settings.payments.systemEnabled && settings.operations.checkoutEnabled && !settings.operations.maintenanceMode;
   const availableGateways: Record<PaymentProvider, boolean> = {
-    razorpay: paymentEnabled && gatewayEnabled(settings, "razorpay") && inOrderRange,
-    stripe: paymentEnabled && gatewayEnabled(settings, "stripe") && inOrderRange,
+    cashfree: paymentEnabled && gatewayEnabled(settings, "cashfree") && inOrderRange,
     upi_offline: paymentEnabled && gatewayEnabled(settings, "upi_offline") && inOrderRange,
+    razorpay: false,
+    stripe: false,
   };
 
   let paymentMessage: string | undefined;
@@ -434,7 +443,7 @@ export function evaluateCheckoutControls(
     paymentMessage = "Payments are temporarily disabled by admin.";
   } else if (!inOrderRange) {
     paymentMessage = `Orders must be between ${settings.payments.rules.minOrderValue} and ${settings.payments.rules.maxOrderValue}.`;
-  } else if (!availableGateways.razorpay && !availableGateways.stripe && !availableGateways.upi_offline) {
+  } else if (!availableGateways.cashfree && !availableGateways.upi_offline) {
     paymentMessage = "No payment gateway is currently available.";
   }
 
@@ -616,9 +625,10 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
       netBanking: true,
       cod: true,
       wallet: true,
-      razorpay: true,
-      stripe: true,
+      razorpay: false,
+      stripe: false,
       paypal: false,
+      cashfree: true,
     },
     rules: {
       minOrderValue: 99,
@@ -631,6 +641,10 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
       autoRefundOnReturnApproval: true,
       partialRefundsEnabled: true,
     },
+    cashfreeAppId: "",
+    cashfreeSecretKey: "",
+    cashfreeWebhookSecret: "",
+    cashfreeSandboxMode: true,
   },
   integrations: {
     defaultMode: "live",
@@ -851,6 +865,10 @@ export function normalizeStoreSettings(input?: Partial<StoreSettings>): StoreSet
           input?.payments?.rules?.codBlockedPincodes ?? DEFAULT_STORE_SETTINGS.payments.rules.codBlockedPincodes,
         ),
       },
+      cashfreeAppId: input?.payments?.cashfreeAppId?.trim() ?? DEFAULT_STORE_SETTINGS.payments.cashfreeAppId,
+      cashfreeSecretKey: input?.payments?.cashfreeSecretKey?.trim() ?? DEFAULT_STORE_SETTINGS.payments.cashfreeSecretKey,
+      cashfreeWebhookSecret: input?.payments?.cashfreeWebhookSecret?.trim() ?? DEFAULT_STORE_SETTINGS.payments.cashfreeWebhookSecret,
+      cashfreeSandboxMode: typeof input?.payments?.cashfreeSandboxMode === "boolean" ? input.payments.cashfreeSandboxMode : DEFAULT_STORE_SETTINGS.payments.cashfreeSandboxMode,
     },
     integrations: {
       ...DEFAULT_STORE_SETTINGS.integrations,

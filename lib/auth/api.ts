@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
-import { ADMIN_2FA_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/lib/constants";
-import { getAdminAuth } from "@/lib/firebase/admin";
+import { SESSION_COOKIE_NAME } from "@/lib/constants";
+import { getAdminAuth, getUserDisplayName } from "@/lib/firebase/admin";
 import { getUserById } from "@/lib/firebase/firestore";
 import { hasPermission, isAdminRole, isVendorRole } from "@/lib/rbac";
 import { AdminPermission, UserRole } from "@/types";
@@ -27,7 +27,7 @@ export async function getRequestUser(request: NextRequest): Promise<RequestUser 
     return {
       uid: decoded.uid,
       email: decoded.email ?? "",
-      name: profile?.name ?? decoded.name ?? "Customer",
+      name: profile?.name ?? getUserDisplayName(decoded),
       role: profile?.role ?? "user",
       twoFactorEnabled: Boolean(profile?.twoFactorEnabled),
     };
@@ -51,10 +51,6 @@ export async function requireApiAdmin(request: NextRequest) {
 
   if (!isAdminRole(user.role)) {
     throw new Error("FORBIDDEN");
-  }
-
-  if (user.twoFactorEnabled && !request.cookies.get(ADMIN_2FA_COOKIE_NAME)?.value) {
-    throw new Error("2FA_REQUIRED");
   }
 
   return user;

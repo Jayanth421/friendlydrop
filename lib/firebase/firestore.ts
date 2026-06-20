@@ -4,8 +4,8 @@ import { FALLBACK_COUPONS, FALLBACK_PRODUCTS } from "@/lib/mock-data";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { DEFAULT_STORE_SETTINGS, normalizeStoreSettings } from "@/lib/settings-engine";
 import {
-  createDefaultProductPageBuilderConfig,
   normalizeProductPageSections,
+  createDefaultProductPageSections,
 } from "@/lib/product-page-builder";
 import {
   ActivityLog,
@@ -19,6 +19,9 @@ import {
   Order,
   OrderStatus,
   Product,
+  ProductPageBuilderGlobalConfig,
+  ProductPageBuilderOverride,
+  ProductPageSectionConfig,
   ReturnRequest,
   Review,
   ShippingDetails,
@@ -30,6 +33,7 @@ import {
   UserRole,
   UserStatus,
   PluginApp,
+  ProductPageTemplate,
   MobileAppControl,
   AutomationCenterConfig,
   CmsPageConfig,
@@ -41,10 +45,6 @@ import {
   SeoTrafficInsight,
   SocialShareConfig,
   SocialShareLink,
-  ProductPageBuilderGlobalConfig,
-  ProductPageBuilderOverride,
-  ProductPageSectionConfig,
-  ProductPageTemplate,
 } from "@/types";
 
 function isFirestoreReady() {
@@ -174,194 +174,6 @@ function mapDoc<T>(doc: FirebaseFirestore.DocumentSnapshot): T {
   } as T;
 }
 
-function isSupabaseProductsReady() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
-}
-
-function toStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map((item) => String(item).trim()).filter(Boolean);
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return [];
-    }
-
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      try {
-        const parsed = JSON.parse(trimmed) as unknown;
-        return toStringArray(parsed);
-      } catch {
-        return [trimmed];
-      }
-    }
-
-    if (trimmed.includes(",")) {
-      return trimmed
-        .split(",")
-        .map((part) => part.trim())
-        .filter(Boolean);
-    }
-
-    return [trimmed];
-  }
-
-  return [];
-}
-
-function toNumber(value: unknown, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function slugify(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function normalizeSupabaseProduct(row: Record<string, unknown>): Product | null {
-  const pickString = (...keys: string[]) => {
-    for (const key of keys) {
-      const value = row[key];
-      if (typeof value === "string" && value.trim()) {
-        return value.trim();
-      }
-    }
-    return "";
-  };
-
-  const id = pickString("id", "product_id", "slug");
-  if (!id) {
-    return null;
-  }
-
-  const name = pickString("name", "title") || "Untitled Product";
-  const description = pickString("description", "short_description", "shortDescription") || name;
-  const slug = pickString("slug") || slugify(name) || id;
-  const images = toStringArray(row.images);
-  const backupImage = pickString("image", "image_url", "thumbnail");
-  const finalImages = images.length ? images : backupImage ? [backupImage] : [];
-  const createdAt = pickString("createdAt", "created_at") || new Date().toISOString();
-
-  return {
-    id,
-    name,
-    slug,
-    subtitle: pickString("subtitle"),
-    shortDescription: pickString("shortDescription", "short_description"),
-    description,
-    price: toNumber(row.price),
-    discountPercent: toNumber(row.discountPercent ?? row.discount_percent, 0),
-    images: finalImages,
-    videoUrl: pickString("videoUrl", "video_url"),
-    category: pickString("category") || "general",
-    subcategory: pickString("subcategory", "sub_category"),
-    stock: toNumber(row.stock),
-    sku: pickString("sku"),
-    brand: pickString("brand"),
-    featured: Boolean(row.featured),
-    recommended: Boolean(row.recommended),
-    popularity: toNumber(row.popularity, 0),
-    tags: toStringArray(row.tags),
-    badges: toStringArray(row.badges),
-    rating: toNumber(row.rating, 0),
-    reviewCount: toNumber(row.reviewCount ?? row.review_count, 0),
-    status: pickString("status") as Product["status"],
-    visibility: pickString("visibility") as Product["visibility"],
-    createdAt,
-    updatedAt: pickString("updatedAt", "updated_at") || createdAt,
-  };
-}
-
-async function fetchSupabaseProductsRows(queryString: string) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return null;
-  }
-
-  const response = await fetch(`${supabaseUrl}/rest/v1/products?${queryString}`, {
-    headers: {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      Accept: "application/json",
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Supabase products request failed (${response.status})`);
-  }
-
-  const payload = (await response.json()) as unknown;
-  if (!Array.isArray(payload)) {
-    return [];
-  }
-
-  return payload as Record<string, unknown>[];
-}
-
-async function getProductsFromSupabase(filters?: {
-  category?: string;
-  search?: string;
-  sort?: "popularity" | "price-asc" | "price-desc" | "newest";
-  minPrice?: number;
-  maxPrice?: number;
-  status?: string;
-  visibility?: string;
-  brands?: string[];
-  minRating?: number;
-  availability?: "in-stock" | "out-of-stock";
-  minDiscount?: number;
-}) {
-  if (!isSupabaseProductsReady()) {
-    return null;
-  }
-
-  try {
-    const rows = await fetchSupabaseProductsRows("select=*");
-    if (!rows) {
-      return null;
-    }
-
-    const normalized = rows
-      .map((row) => normalizeSupabaseProduct(row))
-      .filter((product): product is Product => Boolean(product));
-
-    const sort = filters?.sort ?? "popularity";
-    return sortProducts(applyProductsPostFilters(normalized, filters), sort);
-  } catch (error) {
-    console.warn("Supabase products fetch failed. Falling back to Firestore.", error);
-    return null;
-  }
-}
-
-async function getProductByIdFromSupabase(productId: string) {
-  if (!isSupabaseProductsReady()) {
-    return null;
-  }
-
-  try {
-    const byIdRows = await fetchSupabaseProductsRows(`select=*&id=eq.${encodeURIComponent(productId)}&limit=1`);
-    const byId = byIdRows?.[0] ? normalizeSupabaseProduct(byIdRows[0]) : null;
-    if (byId) {
-      return byId;
-    }
-
-    const bySlugRows = await fetchSupabaseProductsRows(`select=*&slug=eq.${encodeURIComponent(productId)}&limit=1`);
-    return bySlugRows?.[0] ? normalizeSupabaseProduct(bySlugRows[0]) : null;
-  } catch (error) {
-    console.warn("Supabase product-by-id fetch failed. Falling back to Firestore.", error);
-    return null;
-  }
-}
-
 const FALLBACK_USERS: UserProfile[] = [
   {
     id: "user-1",
@@ -456,8 +268,6 @@ const FALLBACK_TRANSACTIONS: Transaction[] = [
 ];
 
 const FALLBACK_SETTINGS: StoreSettings = DEFAULT_STORE_SETTINGS;
-const FALLBACK_PRODUCT_PAGE_BUILDER_GLOBAL: ProductPageBuilderGlobalConfig = createDefaultProductPageBuilderConfig();
-const FALLBACK_PRODUCT_PAGE_TEMPLATES: ProductPageTemplate[] = [];
 
 const FALLBACK_PLUGINS: PluginApp[] = [
   {
@@ -781,15 +591,6 @@ function computeTopCustomers(orders: Order[], users: UserProfile[]) {
 }
 
 export async function getFeaturedProducts(limit = 6): Promise<Product[]> {
-  const supabaseProducts = await getProductsFromSupabase({ sort: "newest" });
-  if (supabaseProducts && supabaseProducts.length) {
-    const featured = supabaseProducts.filter((product) => Boolean(product.featured));
-    if (featured.length) {
-      return featured.slice(0, limit);
-    }
-    return supabaseProducts.slice(0, limit);
-  }
-
   if (!isFirestoreReady()) {
     return FALLBACK_PRODUCTS.slice(0, limit);
   }
@@ -842,11 +643,6 @@ export async function getProducts(filters?: {
   availability?: "in-stock" | "out-of-stock";
   minDiscount?: number;
 }): Promise<Product[]> {
-  const supabaseProducts = await getProductsFromSupabase(filters);
-  if (supabaseProducts) {
-    return supabaseProducts;
-  }
-
   if (!isFirestoreReady()) {
     const sort = filters?.sort ?? "popularity";
     return sortProducts(applyProductsPostFilters(FALLBACK_PRODUCTS, filters), sort);
@@ -913,23 +709,23 @@ export async function getRecommendedProducts(input: { productId?: string; catego
 }
 
 export async function getProductById(productId: string): Promise<Product | null> {
-  const supabaseProduct = await getProductByIdFromSupabase(productId);
-  if (supabaseProduct) {
-    return supabaseProduct;
-  }
-
   if (!isFirestoreReady()) {
     return FALLBACK_PRODUCTS.find((item) => item.id === productId || item.slug === productId) ?? null;
   }
 
-  const doc = await getAdminDb().collection("products").doc(productId).get();
+  try {
+    const doc = await getAdminDb().collection("products").doc(productId).get();
 
-  if (doc.exists) {
-    return mapDoc<Product>(doc);
+    if (doc.exists) {
+      return mapDoc<Product>(doc);
+    }
+
+    const bySlug = await getAdminDb().collection("products").where("slug", "==", productId).limit(1).get();
+    return bySlug.empty ? null : mapDoc<Product>(bySlug.docs[0]);
+  } catch (error) {
+    console.error(`Error in getProductById for ID/slug "${productId}":`, error);
+    return FALLBACK_PRODUCTS.find((item) => item.id === productId || item.slug === productId) ?? null;
   }
-
-  const bySlug = await getAdminDb().collection("products").where("slug", "==", productId).limit(1).get();
-  return bySlug.empty ? null : mapDoc<Product>(bySlug.docs[0]);
 }
 
 export async function createProduct(data: Omit<Product, "id" | "createdAt">) {
@@ -1217,8 +1013,13 @@ export async function getUserById(userId: string): Promise<UserProfile | null> {
     return FALLBACK_USERS.find((user) => user.id === userId) ?? null;
   }
 
-  const snapshot = await getAdminDb().collection("users").doc(userId).get();
-  return snapshot.exists ? mapDoc<UserProfile>(snapshot) : null;
+  try {
+    const snapshot = await getAdminDb().collection("users").doc(userId).get();
+    return snapshot.exists ? mapDoc<UserProfile>(snapshot) : null;
+  } catch (error) {
+    console.error(`Error in getUserById for user "${userId}":`, error);
+    return FALLBACK_USERS.find((user) => user.id === userId) ?? null;
+  }
 }
 
 export async function getAllUsers(): Promise<UserProfile[]> {
@@ -1261,8 +1062,13 @@ export async function getCouponByCode(code: string): Promise<Coupon | null> {
     return FALLBACK_COUPONS.find((coupon) => coupon.code === code.toUpperCase()) ?? null;
   }
 
-  const snapshot = await getAdminDb().collection("coupons").where("code", "==", code.toUpperCase()).limit(1).get();
-  return snapshot.empty ? null : mapDoc<Coupon>(snapshot.docs[0]);
+  try {
+    const snapshot = await getAdminDb().collection("coupons").where("code", "==", code.toUpperCase()).limit(1).get();
+    return snapshot.empty ? null : mapDoc<Coupon>(snapshot.docs[0]);
+  } catch (error) {
+    console.error(`Error in getCouponByCode for code "${code}":`, error);
+    return FALLBACK_COUPONS.find((coupon) => coupon.code === code.toUpperCase()) ?? null;
+  }
 }
 
 export async function getCoupons(): Promise<Coupon[]> {
@@ -1297,8 +1103,13 @@ export async function getCart(userId: string): Promise<CartItem[]> {
     return [];
   }
 
-  const snapshot = await getAdminDb().collection("cart").doc(userId).get();
-  return (snapshot.data()?.items as CartItem[] | undefined) ?? [];
+  try {
+    const snapshot = await getAdminDb().collection("cart").doc(userId).get();
+    return (snapshot.data()?.items as CartItem[] | undefined) ?? [];
+  } catch (error) {
+    console.error(`Error in getCart for user "${userId}":`, error);
+    return [];
+  }
 }
 
 export async function saveWishlist(userId: string, productIds: string[]) {
@@ -1311,22 +1122,95 @@ export async function getWishlist(userId: string): Promise<string[]> {
     return [];
   }
 
-  const snapshot = await getAdminDb().collection("wishlist").doc(userId).get();
-  return (snapshot.data()?.productIds as string[] | undefined) ?? [];
+  try {
+    const snapshot = await getAdminDb().collection("wishlist").doc(userId).get();
+    return (snapshot.data()?.productIds as string[] | undefined) ?? [];
+  } catch (error) {
+    console.error(`Error in getWishlist for user "${userId}":`, error);
+    return [];
+  }
 }
 
-export async function saveUploadRecord(userId: string, imageUrl: string, orderId?: string) {
+export async function saveUploadRecord(input: {
+  userId: string;
+  imageUrl: string;
+  orderId?: string | null;
+  path?: string | null;
+  folder?: string;
+  contentType?: string;
+  sizeBytes?: number;
+  checksumSha256?: string | null;
+  storageProvider?: string;
+  processingState?: string;
+}) {
   ensureFirestoreReady();
 
-  const id = nanoid(12);
-  await getAdminDb().collection("uploads").doc(id).set({
+  const id = nanoid(14);
+  const payload: UploadRecord = {
     id,
-    userId,
-    orderId,
-    imageUrl,
-    status: "pending",
+    userId: input.userId,
+    imageUrl: input.imageUrl,
+    orderId: input.orderId || undefined,
+    path: input.path || undefined,
+    folder: input.folder || "custom_uploads",
+    contentType: input.contentType || "image/jpeg",
+    sizeBytes: input.sizeBytes || 0,
+    checksumSha256: input.checksumSha256 || undefined,
+    storageProvider: (input.storageProvider as "supabase" | "firebase") || "firebase",
+    processingState: (input.processingState as "uploaded" | "deduplicated" | "queued") || "uploaded",
     createdAt: new Date().toISOString(),
-  });
+    updatedAt: new Date().toISOString(),
+  };
+
+  await getAdminDb().collection("uploads").doc(id).set(payload);
+  return payload;
+}
+
+export async function getUploadByChecksum(checksumSha256: string, userId: string): Promise<UploadRecord | null> {
+  if (!isFirestoreReady()) {
+    return null;
+  }
+
+  try {
+    const snapshot = await getAdminDb()
+      .collection("uploads")
+      .where("checksumSha256", "==", checksumSha256)
+      .where("userId", "==", userId)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return null;
+    }
+
+    return mapDoc<UploadRecord>(snapshot.docs[0]);
+  } catch (error) {
+    console.error("Error fetching upload by checksum:", error);
+    return null;
+  }
+}
+
+export async function getTransactionByProofTransactionId(proofTransactionId: string): Promise<Transaction | null> {
+  if (!isFirestoreReady()) {
+    return null;
+  }
+
+  try {
+    const snapshot = await getAdminDb()
+      .collection("transactions")
+      .where("proofTransactionId", "==", proofTransactionId)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return null;
+    }
+
+    return mapDoc<Transaction>(snapshot.docs[0]);
+  } catch (error) {
+    console.error("Error fetching transaction by proof transaction ID:", error);
+    return null;
+  }
 }
 
 export async function getUploadsForAdmin(): Promise<UploadRecord[]> {
@@ -1384,14 +1268,25 @@ export async function createOrder(order: Omit<Order, "id" | "createdAt" | "updat
     status: transactionStatus,
   });
 
+  const profile = await getUserById(order.userId);
+  const newOrderCount = (profile?.orderCount ?? 0) + 1;
+  const newTotalSpend = (profile?.totalSpend ?? 0) + order.totalAmount;
+
+  let newSegment: UserProfile["segment"] = "new";
+  if (newTotalSpend > 15000 || newOrderCount >= 10) {
+    newSegment = "vip";
+  } else if (newOrderCount >= 3) {
+    newSegment = "repeat";
+  }
+
   await getAdminDb()
     .collection("users")
     .doc(order.userId)
     .set(
       {
-        orderCount: (await getOrderCountByUser(order.userId)) + 1,
-        totalSpend: (await getSpendByUser(order.userId)) + order.totalAmount,
-        segment: (await getSegmentForUser(order.userId, order.totalAmount)),
+        orderCount: newOrderCount,
+        totalSpend: newTotalSpend,
+        segment: newSegment,
         updatedAt: new Date().toISOString(),
       },
       { merge: true },
@@ -1619,6 +1514,29 @@ export async function updateTransaction(transactionId: string, updates: Partial<
   await getAdminDb().collection("transactions").doc(transactionId).set({ ...updates, updatedAt: new Date().toISOString() }, { merge: true });
 }
 
+export async function getTransactionByProviderPaymentId(providerPaymentId: string): Promise<Transaction | null> {
+  if (!isFirestoreReady()) {
+    return null;
+  }
+
+  try {
+    const snapshot = await getAdminDb()
+      .collection("transactions")
+      .where("providerPaymentId", "==", providerPaymentId)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return null;
+    }
+
+    return mapDoc<Transaction>(snapshot.docs[0]);
+  } catch (error) {
+    console.error("Error fetching transaction by provider payment ID:", error);
+    return null;
+  }
+}
+
 export async function createSupportTicket(input: Omit<SupportTicket, "id" | "createdAt" | "updatedAt">) {
   ensureFirestoreReady();
   const id = nanoid(14);
@@ -1645,6 +1563,70 @@ export async function getSupportTickets(): Promise<SupportTicket[]> {
 export async function updateSupportTicket(ticketId: string, updates: Partial<SupportTicket>) {
   ensureFirestoreReady();
   await getAdminDb().collection("supportTickets").doc(ticketId).set({ ...updates, updatedAt: new Date().toISOString() }, { merge: true });
+}
+
+export async function getSupportTicketById(ticketId: string): Promise<SupportTicket | null> {
+  if (!isFirestoreReady()) {
+    return null;
+  }
+
+  try {
+    const snapshot = await getAdminDb().collection("supportTickets").doc(ticketId).get();
+    return snapshot.exists ? mapDoc<SupportTicket>(snapshot) : null;
+  } catch (error) {
+    console.error(`Error in getSupportTicketById for ticket "${ticketId}":`, error);
+    return null;
+  }
+}
+
+export async function getSupportTicketsByUser(userId: string): Promise<SupportTicket[]> {
+  if (!isFirestoreReady()) {
+    return [];
+  }
+
+  try {
+    const snapshot = await getAdminDb()
+      .collection("supportTickets")
+      .where("userId", "==", userId)
+      .orderBy("updatedAt", "desc")
+      .get();
+    return snapshot.docs.map((doc) => mapDoc<SupportTicket>(doc));
+  } catch (error) {
+    console.error(`Error in getSupportTicketsByUser for user "${userId}":`, error);
+    return [];
+  }
+}
+
+export async function appendSupportTicketMessage(input: {
+  ticketId: string;
+  by: string;
+  byRole: UserRole | "assistant_bot" | "customer";
+  message: string;
+  attachments?: any;
+}) {
+  ensureFirestoreReady();
+
+  const { FieldValue } = await import("firebase-admin/firestore");
+  const messageId = `msg-${Date.now()}`;
+  const newMessage = {
+    id: messageId,
+    by: input.by,
+    byRole: input.byRole,
+    message: input.message,
+    at: new Date().toISOString(),
+    attachments: input.attachments || null,
+  };
+
+  const db = getAdminDb();
+  await db
+    .collection("supportTickets")
+    .doc(input.ticketId)
+    .update({
+      messages: FieldValue.arrayUnion(newMessage),
+      updatedAt: new Date().toISOString(),
+    });
+
+  return newMessage;
 }
 
 export async function createReturnRequest(input: Omit<ReturnRequest, "id" | "createdAt" | "updatedAt">) {
@@ -1709,24 +1691,6 @@ export async function getExpenses(): Promise<FinanceExpense[]> {
   return snapshot.docs.map((doc) => mapDoc<FinanceExpense>(doc));
 }
 
-function stripUndefinedDeep<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => stripUndefinedDeep(item)) as T;
-  }
-
-  if (value && typeof value === "object") {
-    const input = value as Record<string, unknown>;
-    const output: Record<string, unknown> = {};
-    for (const [key, raw] of Object.entries(input)) {
-      if (raw === undefined) continue;
-      output[key] = stripUndefinedDeep(raw);
-    }
-    return output as T;
-  }
-
-  return value;
-}
-
 export async function getStoreSettings(): Promise<StoreSettings> {
   if (!isFirestoreReady()) {
     return FALLBACK_SETTINGS;
@@ -1749,19 +1713,13 @@ export async function getStoreSettings(): Promise<StoreSettings> {
   });
 }
 
-export async function getStoreSettingsSafe(options?: { timeoutMs?: number; logLabel?: string }): Promise<StoreSettings> {
-  const timeoutMs = options?.timeoutMs ?? 2500;
-  const logLabel = options?.logLabel ?? "getStoreSettingsSafe";
-
+export async function getStoreSettingsSafe(options?: { logLabel?: string }): Promise<StoreSettings> {
   try {
-    return await Promise.race([
-      getStoreSettings(),
-      new Promise<StoreSettings>((_, reject) => {
-        setTimeout(() => reject(new Error(`Store settings timed out after ${timeoutMs}ms`)), timeoutMs);
-      }),
-    ]);
+    return await getStoreSettings();
   } catch (error) {
-    console.warn(`[${logLabel}] Falling back to default store settings`, error);
+    if (options?.logLabel) {
+      console.warn(`[${options.logLabel}] Error fetching store settings:`, error);
+    }
     return FALLBACK_SETTINGS;
   }
 }
@@ -1805,190 +1763,15 @@ export async function updateStoreSettings(updates: Partial<StoreSettings>) {
       ...current.alerts,
       ...(updates.alerts ?? {}),
     },
-    menuEditor: {
-      ...current.menuEditor,
-      ...(updates.menuEditor ?? {}),
-      desktopLinks: updates.menuEditor?.desktopLinks ?? current.menuEditor.desktopLinks,
-      mobileShopLinks: updates.menuEditor?.mobileShopLinks ?? current.menuEditor.mobileShopLinks,
-      mobileMiscLinks: updates.menuEditor?.mobileMiscLinks ?? current.menuEditor.mobileMiscLinks,
-      megaMenus: updates.menuEditor?.megaMenus ?? current.menuEditor.megaMenus,
-      popupStyle: {
-        ...current.menuEditor.popupStyle,
-        ...(updates.menuEditor?.popupStyle ?? {}),
-      },
-    },
   });
 
   await getAdminDb().collection("settings").doc("default").set(
-    stripUndefinedDeep({
+    {
       ...merged,
       updatedAt: new Date().toISOString(),
-    }),
+    },
     { merge: true },
   );
-}
-
-export async function getProductPageBuilderGlobalConfig(): Promise<ProductPageBuilderGlobalConfig> {
-  if (!isFirestoreReady()) {
-    return FALLBACK_PRODUCT_PAGE_BUILDER_GLOBAL;
-  }
-
-  const snapshot = await getAdminDb().collection("productPageBuilderGlobal").doc("default").get();
-
-  if (!snapshot.exists) {
-    return FALLBACK_PRODUCT_PAGE_BUILDER_GLOBAL;
-  }
-
-  const data = snapshot.data() as Partial<ProductPageBuilderGlobalConfig> | undefined;
-  const normalizedSections = normalizeProductPageSections(data?.sections);
-
-  return {
-    id: "default",
-    sections: normalizedSections,
-    reusableTemplateIds: data?.reusableTemplateIds ?? [],
-    globalFlags: {
-      ...FALLBACK_PRODUCT_PAGE_BUILDER_GLOBAL.globalFlags,
-      ...(data?.globalFlags ?? {}),
-    },
-    updatedAt: data?.updatedAt ?? FALLBACK_PRODUCT_PAGE_BUILDER_GLOBAL.updatedAt,
-    updatedBy: data?.updatedBy,
-  };
-}
-
-export async function upsertProductPageBuilderGlobalConfig(
-  updates: Partial<ProductPageBuilderGlobalConfig>,
-  actorId?: string,
-) {
-  ensureFirestoreReady();
-  const current = await getProductPageBuilderGlobalConfig();
-  const sections = normalizeProductPageSections(updates.sections ?? current.sections);
-
-  const merged: ProductPageBuilderGlobalConfig = {
-    ...current,
-    ...updates,
-    id: "default",
-    sections,
-    reusableTemplateIds: updates.reusableTemplateIds ?? current.reusableTemplateIds ?? [],
-    globalFlags: {
-      ...current.globalFlags,
-      ...(updates.globalFlags ?? {}),
-    },
-    updatedAt: new Date().toISOString(),
-    updatedBy: actorId ?? updates.updatedBy ?? current.updatedBy,
-  };
-
-  await getAdminDb().collection("productPageBuilderGlobal").doc("default").set(merged, { merge: true });
-  return merged;
-}
-
-export async function getProductPageBuilderTemplates(): Promise<ProductPageTemplate[]> {
-  if (!isFirestoreReady()) {
-    return FALLBACK_PRODUCT_PAGE_TEMPLATES;
-  }
-
-  const snapshot = await getAdminDb()
-    .collection("productPageBuilderTemplates")
-    .orderBy("updatedAt", "desc")
-    .limit(200)
-    .get();
-
-  return snapshot.docs.map((doc) => {
-    const mapped = mapDoc<ProductPageTemplate>(doc);
-    return {
-      ...mapped,
-      sections: normalizeProductPageSections(mapped.sections),
-    };
-  });
-}
-
-export async function saveProductPageBuilderTemplate(input: {
-  id?: string;
-  name: string;
-  description?: string;
-  sections: ProductPageSectionConfig[];
-  actorId?: string;
-}) {
-  ensureFirestoreReady();
-
-  const id = input.id ?? nanoid(12);
-  const now = new Date().toISOString();
-  const payload: ProductPageTemplate = {
-    id,
-    name: input.name.trim(),
-    description: input.description?.trim(),
-    sections: normalizeProductPageSections(input.sections),
-    createdAt: now,
-    updatedAt: now,
-    createdBy: input.actorId,
-  };
-
-  if (input.id) {
-    const existing = await getAdminDb().collection("productPageBuilderTemplates").doc(input.id).get();
-    const existingData = existing.exists ? (existing.data() as Partial<ProductPageTemplate>) : null;
-    payload.createdAt = existingData?.createdAt ?? now;
-    payload.createdBy = existingData?.createdBy ?? input.actorId;
-  }
-
-  await getAdminDb().collection("productPageBuilderTemplates").doc(id).set(payload, { merge: true });
-  return payload;
-}
-
-export async function getProductPageBuilderOverride(productId: string): Promise<ProductPageBuilderOverride | null> {
-  if (!isFirestoreReady()) {
-    return null;
-  }
-
-  const snapshot = await getAdminDb().collection("productPageBuilderOverrides").doc(productId).get();
-  if (!snapshot.exists) {
-    return null;
-  }
-
-  const mapped = snapshot.data() as ProductPageBuilderOverride;
-  return {
-    ...mapped,
-    id: productId,
-    productId,
-    sections: normalizeProductPageSections(mapped.sections),
-  };
-}
-
-export async function upsertProductPageBuilderOverride(input: {
-  productId: string;
-  sections?: ProductPageSectionConfig[];
-  templateId?: string;
-  actorId?: string;
-}) {
-  ensureFirestoreReady();
-  const now = new Date().toISOString();
-
-  const payload: ProductPageBuilderOverride = {
-    id: input.productId,
-    productId: input.productId,
-    sections: input.sections ? normalizeProductPageSections(input.sections) : undefined,
-    templateId: input.templateId,
-    updatedAt: now,
-    updatedBy: input.actorId,
-  };
-
-  await getAdminDb().collection("productPageBuilderOverrides").doc(input.productId).set(payload, { merge: true });
-  return payload;
-}
-
-export async function resolveProductPageSectionsForProduct(productId: string): Promise<ProductPageSectionConfig[]> {
-  const [globalConfig, override, templates] = await Promise.all([
-    getProductPageBuilderGlobalConfig(),
-    getProductPageBuilderOverride(productId),
-    getProductPageBuilderTemplates(),
-  ]);
-
-  const templateSections = override?.templateId
-    ? templates.find((template) => template.id === override.templateId)?.sections
-    : undefined;
-
-  const baseSections = templateSections ?? globalConfig.sections;
-  const merged = normalizeProductPageSections(override?.sections ?? baseSections);
-
-  return merged;
 }
 
 export async function getActivityLogs(limit = 200): Promise<ActivityLog[]> {
@@ -2478,4 +2261,195 @@ export async function getGrowthAnalyticsSummary() {
     shareRevenue,
     totalConversionsFromAds: metaCampaigns.reduce((sum, campaign) => sum + campaign.conversions, 0),
   };
+}
+
+export async function getCmsPageBySlug(slug: string): Promise<CmsPageConfig | null> {
+  if (!isFirestoreReady()) {
+    return FALLBACK_CMS_PAGES.find((page) => page.slug === slug) ?? null;
+  }
+
+  try {
+    const snapshot = await getAdminDb().collection("cms_pages").where("slug", "==", slug).limit(1).get();
+
+    if (snapshot.empty) {
+      return null;
+    }
+
+    return mapDoc<CmsPageConfig>(snapshot.docs[0]);
+  } catch (error) {
+    console.warn(`[getCmsPageBySlug] Error fetching CMS page:`, error);
+    return FALLBACK_CMS_PAGES.find((page) => page.slug === slug) ?? null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Product Page Builder
+// ---------------------------------------------------------------------------
+
+export async function getProductPageBuilderGlobalConfig(): Promise<ProductPageBuilderGlobalConfig> {
+  if (!isFirestoreReady()) {
+    return {
+      id: "default",
+      sections: createDefaultProductPageSections(),
+      reusableTemplateIds: [],
+      globalFlags: {},
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  try {
+    const doc = await getAdminDb().collection("product_page_builder").doc("default").get();
+
+    if (!doc.exists) {
+      return {
+        id: "default",
+        sections: createDefaultProductPageSections(),
+        reusableTemplateIds: [],
+        globalFlags: {},
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const data = doc.data() as ProductPageBuilderGlobalConfig;
+    return {
+      ...data,
+      id: "default",
+      sections: normalizeProductPageSections(data.sections),
+    };
+  } catch (error) {
+    console.warn("[getProductPageBuilderGlobalConfig] Error:", error);
+    return {
+      id: "default",
+      sections: createDefaultProductPageSections(),
+      reusableTemplateIds: [],
+      globalFlags: {},
+      updatedAt: new Date().toISOString(),
+    };
+  }
+}
+
+export async function getProductPageBuilderOverride(
+  productId: string,
+): Promise<ProductPageBuilderOverride | null> {
+  if (!isFirestoreReady()) {
+    return null;
+  }
+
+  try {
+    const doc = await getAdminDb()
+      .collection("product_page_builder_overrides")
+      .doc(productId)
+      .get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    return mapDoc<ProductPageBuilderOverride>(doc);
+  } catch (error) {
+    console.warn(`[getProductPageBuilderOverride] Error for ${productId}:`, error);
+    return null;
+  }
+}
+
+export async function upsertProductPageBuilderOverride(input: {
+  productId: string;
+  sections?: ProductPageSectionConfig[];
+  templateId?: string;
+  actorId?: string;
+}): Promise<ProductPageBuilderOverride> {
+  ensureFirestoreReady();
+
+  const now = new Date().toISOString();
+  const payload: ProductPageBuilderOverride = {
+    id: input.productId,
+    productId: input.productId,
+    templateId: input.templateId,
+    sections: input.sections,
+    updatedAt: now,
+    updatedBy: input.actorId,
+  };
+
+  await getAdminDb()
+    .collection("product_page_builder_overrides")
+    .doc(input.productId)
+    .set(payload, { merge: true });
+
+  return payload;
+}
+
+export async function resolveProductPageSectionsForProduct(
+  productId: string,
+): Promise<ProductPageSectionConfig[]> {
+  const [globalConfig, override] = await Promise.all([
+    getProductPageBuilderGlobalConfig(),
+    getProductPageBuilderOverride(productId),
+  ]);
+
+  // If the product has a per-product override with sections, use those
+  if (override?.sections?.length) {
+    return normalizeProductPageSections(override.sections);
+  }
+
+  // Otherwise fall back to global config sections
+  return normalizeProductPageSections(globalConfig.sections);
+}
+
+export async function getProductPageBuilderTemplates(): Promise<ProductPageTemplate[]> {
+  if (!isFirestoreReady()) {
+    return [];
+  }
+
+  try {
+    const snapshot = await getAdminDb().collection("product_page_templates").orderBy("name", "asc").get();
+    return snapshot.docs.map((doc) => mapDoc<ProductPageTemplate>(doc));
+  } catch (error) {
+    console.error("Error fetching product page templates:", error);
+    return [];
+  }
+}
+
+export async function saveProductPageBuilderTemplate(input: {
+  id?: string;
+  name: string;
+  description?: string;
+  sections: any;
+  actorId?: string;
+}): Promise<ProductPageTemplate> {
+  ensureFirestoreReady();
+
+  const id = input.id || nanoid(14);
+  const now = new Date().toISOString();
+  const payload: ProductPageTemplate = {
+    id,
+    name: input.name,
+    description: input.description || "",
+    sections: input.sections,
+    updatedAt: now,
+    updatedBy: input.actorId,
+  };
+
+  await getAdminDb().collection("product_page_templates").doc(id).set(payload, { merge: true });
+  return payload;
+}
+
+export async function upsertProductPageBuilderGlobalConfig(
+  updates: Partial<ProductPageBuilderGlobalConfig>,
+  actorId?: string,
+): Promise<ProductPageBuilderGlobalConfig> {
+  ensureFirestoreReady();
+
+  const now = new Date().toISOString();
+  const current = await getProductPageBuilderGlobalConfig();
+
+  const payload: ProductPageBuilderGlobalConfig = {
+    ...current,
+    ...updates,
+    id: "default",
+    updatedAt: now,
+    updatedBy: actorId,
+  };
+
+  await getAdminDb().collection("product_page_builder").doc("default").set(payload, { merge: true });
+  return payload;
 }

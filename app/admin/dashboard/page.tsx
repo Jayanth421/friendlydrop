@@ -17,7 +17,11 @@ export default async function AdminDashboardPage() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Revenue" value={formatCurrency(stats.totalSales)} helper="Daily, weekly, monthly included" />
         <KpiCard label="Orders" value={String(stats.totalOrders)} helper="All lifecycle states" />
-        <KpiCard label="Customers" value={String(stats.totalUsers)} helper={`${stats.newCustomers} new � ${stats.returningCustomers} returning`} />
+        <KpiCard
+          label="Customers"
+          value={String(stats.totalUsers)}
+          helper={`${stats.newCustomers} new • ${stats.returningCustomers} returning`}
+        />
         <KpiCard label="Conversion" value={`${stats.conversionRate}%`} helper="Orders / total users" />
       </div>
 
@@ -28,16 +32,24 @@ export default async function AdminDashboardPage() {
           <TabsTrigger value="monthly">Monthly</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="daily"><RevenueChart points={stats.trendsDaily} /></TabsContent>
-        <TabsContent value="weekly"><RevenueChart points={stats.trendsWeekly} /></TabsContent>
-        <TabsContent value="monthly"><RevenueChart points={stats.trendsMonthly} /></TabsContent>
+        <TabsContent value="daily">
+          <RevenueChart points={stats.trendsDaily} />
+        </TabsContent>
+        <TabsContent value="weekly">
+          <RevenueChart points={stats.trendsWeekly} />
+        </TabsContent>
+        <TabsContent value="monthly">
+          <RevenueChart points={stats.trendsMonthly} />
+        </TabsContent>
       </Tabs>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <RevenueByCategoryChart data={stats.revenueByCategory} />
 
         <Card>
-          <CardHeader><CardTitle>Top Customers</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Top Customers</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3">
             {stats.topCustomers.map((customer) => (
               <div key={customer.userId} className="flex items-center justify-between rounded-md border border-slate-100 p-3 text-sm">
@@ -54,7 +66,9 @@ export default async function AdminDashboardPage() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle>Best Selling Products</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Best Selling Products</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-2">
             {stats.bestSellingProducts.map((product) => (
               <div key={product.productId} className="flex items-center justify-between rounded-md border border-slate-100 p-3 text-sm">
@@ -69,7 +83,9 @@ export default async function AdminDashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Recent Orders</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Recent Orders</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-2">
             {stats.recentOrders.map((order) => (
               <div key={order.id} className="flex items-center justify-between rounded-md border border-slate-100 p-3 text-sm">

@@ -1,34 +1,22 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { FirebaseError } from "firebase/app";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-
 function getResetLinkErrorMessage(error: unknown) {
-  if (!(error instanceof FirebaseError)) {
-    return "Could not send reset link. Please try again.";
-  }
-
-  switch (error.code) {
-    case "auth/invalid-email":
+  if (error instanceof Error) {
+    const message = error.message;
+    if (message.includes("auth/invalid-email")) {
       return "Enter a valid email address.";
-    case "auth/missing-email":
-      return "Email is required.";
-    case "auth/operation-not-allowed":
-      return "Email/password sign-in is disabled in Firebase Auth.";
-    case "auth/unauthorized-continue-uri":
-    case "auth/invalid-continue-uri":
-      return "Reset redirect URL is not authorized in Firebase Auth domains.";
-    case "auth/too-many-requests":
+    }
+    if (message.includes("auth/too-many-requests")) {
       return "Too many attempts. Please wait a bit and try again.";
-    case "auth/network-request-failed":
-      return "Network error. Check your internet and try again.";
-    default:
-      return `Could not send reset link (${error.code}).`;
+    }
+    return message;
   }
+  return "Could not send reset link. Please try again.";
 }
 
 export default function ForgotPasswordPage() {

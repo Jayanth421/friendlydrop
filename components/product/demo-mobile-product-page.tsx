@@ -206,7 +206,7 @@ export function DemoMobileProductPage({ sectionControls }: { sectionControls?: D
         </div>
       </section>
     ),
-    sticky_add_to_cart: (
+   sticky_add_to_cart: (
       <div className="sticky bottom-3 z-20 rounded-2xl border border-[#d1e6cb] bg-white/95 p-2 shadow-[0_16px_40px_-22px_rgba(25,44,33,0.45)] backdrop-blur">
         <button type="button" className="w-full rounded-xl bg-gradient-to-r from-[#1e4f82] to-[#8bcf66] py-3 text-sm font-semibold uppercase tracking-[0.1em] text-white">
           Add To Cart

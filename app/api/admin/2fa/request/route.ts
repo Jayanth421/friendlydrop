@@ -51,3 +51,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Could not create challenge" }, { status: 400 });
   }
 }
+
