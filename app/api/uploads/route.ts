@@ -8,8 +8,8 @@ import {
   isAllowedMediaFolder,
   MediaFolder,
   MEDIA_FOLDERS,
-  resolveMediaUrl,
 } from "@/lib/media";
+import { isOqensStorageConfigured, uploadFileToOqens } from "@/lib/storage/oqens";
 import { beginIdempotentRequest, completeIdempotentRequest, failIdempotentRequest } from "@/lib/security/idempotency";
 import { assertRateLimit, buildRateLimitKey } from "@/lib/security/rate-limit";
 import { assertTrustedMutationRequest, toGuardErrorResponse } from "@/lib/security/request-guards";
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       await saveUploadRecord({
         userId: user.uid,
         imageUrl,
-        storageProvider: "firebase",
+        storageProvider: "oqens",
         processingState: "uploaded",
       });
       return NextResponse.json({ ok: true, imageUrl });
@@ -116,11 +116,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `File exceeds max size (${Math.round(maxBytes / (1024 * 1024))}MB)` }, { status: 400 });
     }
 
-    const bucket = getAdminStorage().bucket();
-    if (!bucket) {
-      return NextResponse.json({ error: "Firebase storage is not configured" }, { status: 400 });
-    }
-
     const objectPath = buildMediaObjectPath({
       folder: folder as MediaFolder,
       userId: user.uid,
@@ -136,7 +131,8 @@ export async function POST(request: NextRequest) {
         ok: true,
         imageUrl: existingUpload.imageUrl,
         mediaUrl: existingUpload.imageUrl,
-        path: existingUpload.path,
+        path: existingUpload.imageUrl,
+        objectPath: existingUpload.path,
         contentType: existingUpload.contentType ?? contentType,
         sizeBytes: existingUpload.sizeBytes ?? file.size,
         checksumSha256,
@@ -160,26 +156,41 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const fileRef = bucket.file(objectPath);
-      await fileRef.save(Buffer.from(bytes), {
-        metadata: {
-          contentType: contentType,
-        },
-        public: true,
-      });
+      let mediaUrl: string;
+      let storedObjectPath = objectPath;
+      let storageProvider: "firebase" | "oqens" = "firebase";
 
-      const mediaUrl = resolveMediaUrl(objectPath, { quality: contentType.startsWith("image/") ? 75 : undefined });
+      if (isOqensStorageConfigured()) {
+        const upload = await uploadFileToOqens({
+          file,
+          key: objectPath,
+          contentType,
+        });
+        mediaUrl = upload.publicUrl;
+        storedObjectPath = upload.key;
+        storageProvider = "oqens";
+      } else {
+        const bucket = getAdminStorage().bucket();
+        const fileRef = bucket.file(objectPath);
+        await fileRef.save(Buffer.from(bytes), {
+          metadata: {
+            contentType,
+          },
+          public: true,
+        });
+        mediaUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media`;
+      }
 
       if (shouldRecord) {
         await saveUploadRecord({
           userId: user.uid,
           imageUrl: mediaUrl,
-          path: objectPath,
+          path: storedObjectPath,
           folder,
           contentType,
           sizeBytes: file.size,
           checksumSha256,
-          storageProvider: "firebase",
+          storageProvider,
           processingState: "queued",
         });
       }
@@ -188,7 +199,8 @@ export async function POST(request: NextRequest) {
         ok: true,
         imageUrl: mediaUrl,
         mediaUrl,
-        path: objectPath,
+        path: storageProvider === "oqens" ? mediaUrl : storedObjectPath,
+        objectPath: storedObjectPath,
         contentType,
         sizeBytes: file.size,
         checksumSha256,

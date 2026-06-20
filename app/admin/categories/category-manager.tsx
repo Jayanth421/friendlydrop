@@ -516,7 +516,7 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
             <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100 bg-stone-50/50">
               <div>
                 <h3 className="text-base font-bold text-stone-900">Edit Category</h3>
-                <p className="text-xs text-stone-500 mt-0.5">Modify properties for "{editingCategory.name}"</p>
+                <p className="text-xs text-stone-500 mt-0.5">Modify properties for &quot;{editingCategory.name}&quot;</p>
               </div>
               <button
                 onClick={() => setEditingCategory(null)}

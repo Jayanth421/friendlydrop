@@ -418,7 +418,7 @@ export interface UploadRecord {
   contentType?: string;
   sizeBytes?: number;
   checksumSha256?: string;
-  storageProvider?: "supabase" | "firebase";
+  storageProvider?: "supabase" | "firebase" | "oqens";
   duplicateOfUploadId?: string;
   processingState?: "uploaded" | "deduplicated" | "queued";
   status?: DesignApprovalStatus;

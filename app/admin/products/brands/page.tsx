@@ -399,7 +399,7 @@ export default function BrandManagementPage() {
             <div className="px-6 py-4 border-b border-stone-100 bg-stone-50/50 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-stone-900">Rename Brand Tag</h3>
-                <p className="text-xs text-stone-500 mt-0.5">Renames "{renamingBrand}" across all matching products.</p>
+                <p className="text-xs text-stone-500 mt-0.5">Renames &quot;{renamingBrand}&quot; across all matching products.</p>
               </div>
               <button
                 onClick={() => setRenamingBrand(null)}

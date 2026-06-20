@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCartStore } from "@/store/use-cart-store";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
-export default function CashfreeReturnPage() {
+function CashfreeReturnContent() {
   const params = useSearchParams();
   const router = useRouter();
   const clearCart = useCartStore((state) => state.clearCart);
@@ -138,5 +138,20 @@ export default function CashfreeReturnPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function CashfreeReturnPage() {
+  return (
+    <Suspense fallback={
+      <main className="flex min-h-[70vh] items-center justify-center p-4">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-lg flex flex-col items-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin text-orange-600" />
+          <h1 className="font-display text-2xl font-bold text-ink">Verifying payment status...</h1>
+        </div>
+      </main>
+    }>
+      <CashfreeReturnContent />
+    </Suspense>
   );
 }

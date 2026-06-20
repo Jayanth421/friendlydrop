@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { ReactNode, Suspense } from "react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { Card } from "@/components/ui/card";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
@@ -19,7 +19,9 @@ export function AdminShell({
 }) {
   return (
     <SidebarProvider>
-      <AdminSidebar name={name} role={role} />
+      <Suspense fallback={<div className="w-64 bg-stone-900 h-screen" />}>
+        <AdminSidebar name={name} role={role} />
+      </Suspense>
 
       <SidebarInset className="bg-stone-10 text-stone-900 grain-texture overflow-hidden">
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">

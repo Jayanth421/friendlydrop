@@ -184,10 +184,6 @@ export function Navbar({ storeName, brandPrefix, logoUrl, menuEditor }: NavbarPr
     ? activeTopMenu?.children.find((item) => item.id === mobileColumnId) ?? null
     : null;
 
-  if (pathname.startsWith("/admin")) {
-    return null;
-  }
-
   const isLinkActive = (href: string) => {
     const [linkPath, linkQuery = ""] = href.split("?");
     if (pathname !== linkPath) return false;
@@ -214,6 +210,10 @@ export function Navbar({ storeName, brandPrefix, logoUrl, menuEditor }: NavbarPr
       document.body.style.overflow = previous;
     };
   }, [mobileMenuOpen]);
+
+  if (pathname.startsWith("/admin")) {
+    return null;
+  }
 
   return (
     <motion.header

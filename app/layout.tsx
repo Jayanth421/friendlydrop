@@ -7,6 +7,7 @@ import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { getCachedStoreSettings } from "@/lib/cache";
+import { Suspense } from "react";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
@@ -54,12 +55,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             `}
           </Script>
           <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" strategy="lazyOnload" />
-          <Navbar
-            storeName={settings.storeName}
-            brandPrefix={settings.brandPrefix}
-            logoUrl={settings.logoUrl}
-            menuEditor={settings.menuEditor}
-          />
+          <Suspense fallback={<div className="h-[56px] md:h-[78px] bg-white border-b border-[#dddbdc]" />}>
+            <Navbar
+              storeName={settings.storeName}
+              brandPrefix={settings.brandPrefix}
+              logoUrl={settings.logoUrl}
+              menuEditor={settings.menuEditor}
+            />
+          </Suspense>
           {children}
           <Footer
             storeName={settings.storeName}
@@ -68,7 +71,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             supportEmail={settings.supportEmail}
             supportPhone={settings.supportPhone}
           />
-          <MobileBottomNav />
+          <Suspense fallback={null}>
+            <MobileBottomNav />
+          </Suspense>
         </AppProviders>
       </body>
     </html>

@@ -1156,7 +1156,7 @@ export async function saveUploadRecord(input: {
     contentType: input.contentType || "image/jpeg",
     sizeBytes: input.sizeBytes || 0,
     checksumSha256: input.checksumSha256 || undefined,
-    storageProvider: (input.storageProvider as "supabase" | "firebase") || "firebase",
+    storageProvider: (input.storageProvider as "supabase" | "firebase" | "oqens") || "firebase",
     processingState: (input.processingState as "uploaded" | "deduplicated" | "queued") || "uploaded",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

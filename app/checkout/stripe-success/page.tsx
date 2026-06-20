@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCartStore } from "@/store/use-cart-store";
 
-export default function StripeSuccessPage() {
+function StripeSuccessContent() {
   const params = useSearchParams();
   const router = useRouter();
   const clearCart = useCartStore((state) => state.clearCart);
@@ -38,5 +38,19 @@ export default function StripeSuccessPage() {
         <p className="mt-2 text-sm text-slate-600">{loading ? "Please wait while we finalize your order." : "If redirect does not happen, open orders page."}</p>
       </div>
     </main>
+  );
+}
+
+export default function StripeSuccessPage() {
+  return (
+    <Suspense fallback={
+      <main className="max-w-xl">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center animate-pulse">
+          <h1 className="font-display text-3xl font-bold text-ink">Verifying transaction...</h1>
+        </div>
+      </main>
+    }>
+      <StripeSuccessContent />
+    </Suspense>
   );
 }

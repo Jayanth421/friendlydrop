@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { confirmPasswordReset } from "firebase/auth";
@@ -8,7 +8,7 @@ import { getFirebaseAuth } from "@/lib/firebase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const params = useSearchParams();
   const router = useRouter();
   const [accessToken, setAccessToken] = useState(params.get("oobCode") ?? params.get("access_token") ?? "");
@@ -55,6 +55,14 @@ export default function ResetPasswordPage() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="max-w-md p-6 bg-white border border-slate-200 rounded-2xl">Loading...</div>}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
 

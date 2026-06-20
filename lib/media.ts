@@ -1,4 +1,5 @@
 export const FIREBASE_STORAGE_BUCKET = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "";
+export const OQENS_PUBLIC_CDN_BASE_URL = process.env.NEXT_PUBLIC_OQENS_PUBLIC_CDN_BASE_URL ?? "";
 
 export const MEDIA_FOLDERS = {
   products: "products",
@@ -35,6 +36,18 @@ function isAbsoluteUrl(value: string) {
   return /^https?:\/\//i.test(value);
 }
 
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function encodePathSegments(path: string) {
+  return path
+    .replace(/^\/+/, "")
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
 export function extractMediaPathFromUrl(value: string) {
   if (!FIREBASE_STORAGE_BUCKET || !isAbsoluteUrl(value)) {
     return null;
@@ -60,6 +73,10 @@ export function resolveMediaUrl(
 
   if (isAbsoluteUrl(value)) {
     return value;
+  }
+
+  if (OQENS_PUBLIC_CDN_BASE_URL) {
+    return `${trimTrailingSlash(OQENS_PUBLIC_CDN_BASE_URL)}/${encodePathSegments(value)}`;
   }
 
   if (!FIREBASE_STORAGE_BUCKET) {
