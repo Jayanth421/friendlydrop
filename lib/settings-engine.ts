@@ -63,6 +63,10 @@ function normalizeCsv(values?: string[]) {
     .filter(Boolean);
 }
 
+function getDefaultCashfreeSandboxMode() {
+  return process.env.CASHFREE_ENV !== "production";
+}
+
 function normalizeMenuEntry(entry: unknown, index: number): StoreMegaMenuEntry | null {
   if (typeof entry === "string") {
     const label = entry.trim();
@@ -659,7 +663,7 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
     cashfreeAppId: "",
     cashfreeSecretKey: "",
     cashfreeWebhookSecret: "",
-    cashfreeSandboxMode: true,
+    cashfreeSandboxMode: getDefaultCashfreeSandboxMode(),
   },
   integrations: {
     defaultMode: "live",
@@ -883,7 +887,7 @@ export function normalizeStoreSettings(input?: Partial<StoreSettings>): StoreSet
       cashfreeAppId: input?.payments?.cashfreeAppId?.trim() ?? DEFAULT_STORE_SETTINGS.payments.cashfreeAppId,
       cashfreeSecretKey: input?.payments?.cashfreeSecretKey?.trim() ?? DEFAULT_STORE_SETTINGS.payments.cashfreeSecretKey,
       cashfreeWebhookSecret: input?.payments?.cashfreeWebhookSecret?.trim() ?? DEFAULT_STORE_SETTINGS.payments.cashfreeWebhookSecret,
-      cashfreeSandboxMode: typeof input?.payments?.cashfreeSandboxMode === "boolean" ? input.payments.cashfreeSandboxMode : DEFAULT_STORE_SETTINGS.payments.cashfreeSandboxMode,
+      cashfreeSandboxMode: typeof input?.payments?.cashfreeSandboxMode === "boolean" ? input.payments.cashfreeSandboxMode : getDefaultCashfreeSandboxMode(),
     },
     integrations: {
       ...DEFAULT_STORE_SETTINGS.integrations,

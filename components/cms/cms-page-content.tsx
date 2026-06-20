@@ -15,6 +15,7 @@ export function CmsPageContent({
   const excerpt = page?.excerpt?.trim();
   const heroImage = resolveMediaUrl(page?.heroImageUrl, { width: 1600, quality: 75, format: "webp" });
   const sections = content.split("\n").map((item) => item.trim()).filter(Boolean);
+  const hasHtmlContent = /<\/?[a-z][\s\S]*>/i.test(content);
 
   return (
     <main className="space-y-4">
@@ -26,13 +27,20 @@ export function CmsPageContent({
         ) : null}
         <h1 className="font-display text-4xl font-semibold md:text-5xl">{title}</h1>
         {excerpt ? <p className="mt-2 max-w-3xl text-sm text-slate-600 dark:text-slate-300">{excerpt}</p> : null}
-        <div className="mt-4 space-y-3">
-          {sections.map((line, index) => (
-            <p key={`${line}-${index}`} className="text-sm leading-7 text-slate-700 dark:text-slate-200">
-              {line}
-            </p>
-          ))}
-        </div>
+        {hasHtmlContent ? (
+          <div
+            className="mt-4 space-y-4 text-sm leading-7 text-slate-700 dark:text-slate-200 [&_a]:text-accent [&_a]:underline [&_figure]:my-5 [&_img]:max-h-[520px] [&_img]:w-full [&_img]:rounded-2xl [&_img]:object-cover"
+            dangerouslySetInnerHTML={{ __html: content }}
+          />
+        ) : (
+          <div className="mt-4 space-y-3">
+            {sections.map((line, index) => (
+              <p key={`${line}-${index}`} className="text-sm leading-7 text-slate-700 dark:text-slate-200">
+                {line}
+              </p>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );

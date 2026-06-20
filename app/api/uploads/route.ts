@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth/api";
 import { getUploadByChecksum, saveUploadRecord } from "@/lib/firebase/firestore";
-import { getAdminStorage } from "@/lib/firebase/admin";
 import {
   buildMediaObjectPath,
   isAllowedMediaFolder,
@@ -90,7 +89,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file");
     const folder = String(formData.get("folder") ?? MEDIA_FOLDERS.products).trim() || MEDIA_FOLDERS.products;
-    const shouldRecord = String(formData.get("record") ?? "false").toLowerCase() === "true";
+    const shouldRecord = String(formData.get("record") ?? "true").toLowerCase() !== "false";
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -156,41 +155,28 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      let mediaUrl: string;
-      let storedObjectPath = objectPath;
-      let storageProvider: "firebase" | "oqens" = "firebase";
-
-      if (isOqensStorageConfigured()) {
-        const upload = await uploadFileToOqens({
-          file,
-          key: objectPath,
-          contentType,
-        });
-        mediaUrl = upload.publicUrl;
-        storedObjectPath = upload.key;
-        storageProvider = "oqens";
-      } else {
-        const bucket = getAdminStorage().bucket();
-        const fileRef = bucket.file(objectPath);
-        await fileRef.save(Buffer.from(bytes), {
-          metadata: {
-            contentType,
-          },
-          public: true,
-        });
-        mediaUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media`;
+      if (!isOqensStorageConfigured()) {
+        return NextResponse.json({ error: "QOENS Cloud Storage is not configured" }, { status: 503 });
       }
+
+      const upload = await uploadFileToOqens({
+        file,
+        key: objectPath,
+        contentType,
+      });
+      const mediaUrl = upload.publicUrl;
+      const storedObjectPath = upload.key;
 
       if (shouldRecord) {
         await saveUploadRecord({
           userId: user.uid,
           imageUrl: mediaUrl,
-          path: storedObjectPath,
+          path: mediaUrl,
           folder,
           contentType,
           sizeBytes: file.size,
           checksumSha256,
-          storageProvider,
+          storageProvider: "oqens",
           processingState: "queued",
         });
       }
@@ -199,7 +185,7 @@ export async function POST(request: NextRequest) {
         ok: true,
         imageUrl: mediaUrl,
         mediaUrl,
-        path: storageProvider === "oqens" ? mediaUrl : storedObjectPath,
+        path: mediaUrl,
         objectPath: storedObjectPath,
         contentType,
         sizeBytes: file.size,

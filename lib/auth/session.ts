@@ -51,7 +51,7 @@ export async function requireAdmin() {
   const user = await requireUser();
 
   if (!isAdminRole(user.role)) {
-    redirect("/");
+    redirect("/admin/access-denied");
   }
 
   return user;

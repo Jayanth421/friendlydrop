@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/constants";
 import { getAdminAuth, getUserDisplayName, isFirebaseReady } from "@/lib/firebase/admin";
-import { upsertUserProfile } from "@/lib/firebase/firestore";
+import { getUserById, upsertUserProfile } from "@/lib/firebase/firestore";
 import { trackAdminSession } from "@/lib/admin/logs";
 import { UserRole } from "@/types";
 import { assertRateLimit, buildRateLimitKey } from "@/lib/security/rate-limit";
@@ -53,7 +53,7 @@ function matchesAnyPattern(email: string, envKey: string) {
   return getPatterns(envKey).some((pattern) => matchesPattern(email, pattern));
 }
 
-function resolveRole(email: string): UserRole {
+function resolveRole(email: string, existingRole?: UserRole): UserRole {
   const normalized = email.toLowerCase();
 
   if (getEmails("SUPER_ADMIN_EMAILS").includes(normalized)) {
@@ -92,7 +92,7 @@ function resolveRole(email: string): UserRole {
     return "vendor";
   }
 
-  return "user";
+  return existingRole ?? "user";
 }
 
 export async function POST(request: NextRequest) {
@@ -124,7 +124,8 @@ export async function POST(request: NextRequest) {
     const sessionCookie = await getAdminAuth().createSessionCookie(idToken, { expiresIn });
 
     const email = decoded.email ?? "";
-    const role = resolveRole(email);
+    const existingProfile = await getUserById(decoded.uid);
+    const role = resolveRole(email, existingProfile?.role);
 
     await upsertUserProfile({
       id: decoded.uid,
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
       phone: normalizePhone(phone),
       role,
       status: "active",
-      twoFactorEnabled: false,
+      twoFactorEnabled: existingProfile?.twoFactorEnabled ?? false,
       lastLoginAt: new Date().toISOString(),
     });
 

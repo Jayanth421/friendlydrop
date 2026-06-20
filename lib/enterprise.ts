@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { createSlug } from "@/lib/utils";
 import { getAdminDb, isFirebaseReady } from "@/lib/firebase/admin";
 import { getAllOrders, getAllUsers, getMarketingCampaigns, getProducts, getSupportTickets, getTransactions } from "@/lib/firebase/firestore";
+import { isAdminRole } from "@/lib/rbac";
 import { BannerItem, CatalogCategory, UserProfile, VendorPayout, VendorProfile } from "@/types";
 
 function isFirestoreReady() {
@@ -306,19 +307,116 @@ export async function getCustomerCrmSnapshot() {
 }
 
 export async function getVendorDashboardSnapshot(user: UserProfile) {
-  const [products, orders, payouts] = await Promise.all([getProducts(), getAllOrders(), getVendorPayouts()]);
+  const [products, orders, payouts, users, supportTickets] = await Promise.all([
+    getProducts(),
+    getAllOrders(),
+    getVendorPayouts(),
+    getAllUsers(),
+    getSupportTickets(),
+  ]);
   const vendorId = user.id;
-  const vendorProducts = products.filter((product) => product.vendorId === vendorId);
+  const canViewMarketplaceVendorOverview = isAdminRole(user.role);
+  const vendorProducts = canViewMarketplaceVendorOverview
+    ? products.filter((product) => product.vendorId || product.status !== "archived")
+    : products.filter((product) => product.vendorId === vendorId);
   const productIds = new Set(vendorProducts.map((product) => product.id));
-  const vendorOrders = orders.filter((order) => order.items.some((item) => productIds.has(item.productId)));
+  const vendorOrders = canViewMarketplaceVendorOverview
+    ? orders
+    : orders.filter((order) => order.items.some((item) => productIds.has(item.productId)));
+  const customerIds = new Set(vendorOrders.map((order) => order.userId));
+  const vendorCustomers = users.filter((customer) => customerIds.has(customer.id));
+  const vendorPayouts = payouts.filter((payout) => payout.vendorId === vendorId);
+  const revenue = vendorOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const todayRevenue = vendorOrders
+    .filter((order) => order.createdAt.slice(0, 10) === todayKey)
+    .reduce((sum, order) => sum + order.totalAmount, 0);
+  const monthlyRevenue = vendorOrders
+    .filter((order) => order.createdAt.slice(0, 7) === monthKey)
+    .reduce((sum, order) => sum + order.totalAmount, 0);
+  const totalEarnings = revenue * 0.88;
+  const pendingPayoutAmount = vendorPayouts
+    .filter((payout) => payout.status === "pending")
+    .reduce((sum, payout) => sum + payout.amount, 0);
+  const completedPayoutAmount = vendorPayouts
+    .filter((payout) => payout.status === "completed")
+    .reduce((sum, payout) => sum + payout.amount, 0);
+  const orderStatusCounts = vendorOrders.reduce<Record<string, number>>((acc, order) => {
+    acc[order.status] = (acc[order.status] ?? 0) + 1;
+    return acc;
+  }, {});
+  const revenueByDay = Array.from({ length: 7 }).map((_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - index));
+    const key = date.toISOString().slice(0, 10);
+    const dayOrders = vendorOrders.filter((order) => order.createdAt.slice(0, 10) === key);
+    return {
+      label: date.toLocaleDateString("en-IN", { weekday: "short" }),
+      revenue: dayOrders.reduce((sum, order) => sum + order.totalAmount, 0),
+      orders: dayOrders.length,
+    };
+  });
+  const productPerformance = vendorProducts
+    .map((product) => {
+      const matchingOrders = vendorOrders.filter((order) => order.items.some((item) => item.productId === product.id));
+      return {
+        id: product.id,
+        name: product.name,
+        image: product.primaryImage ?? product.images[0],
+        stock: product.stock,
+        status: product.status ?? "published",
+        revenue: matchingOrders.reduce((sum, order) => {
+          const productTotal = order.items
+            .filter((item) => item.productId === product.id)
+            .reduce((itemSum, item) => itemSum + item.price * item.quantity, 0);
+          return sum + productTotal;
+        }, 0),
+        orders: matchingOrders.length,
+        rating: product.rating ?? 0,
+        reviewCount: product.reviewCount ?? 0,
+      };
+    })
+    .sort((a, b) => b.revenue - a.revenue);
+  const openSupportTickets = supportTickets.filter((ticket) => ticket.status !== "resolved" && customerIds.has(ticket.userId)).length;
+  const reviewCount = vendorProducts.reduce((sum, product) => sum + (product.reviewCount ?? 0), 0);
+  const averageRating =
+    vendorProducts.reduce((sum, product) => sum + (product.rating ?? 0), 0) / (vendorProducts.filter((product) => product.rating).length || 1);
 
   return {
     vendorId,
+    vendorName: canViewMarketplaceVendorOverview ? "Marketplace Vendor Overview" : user.name,
+    vendorEmail: user.email,
+    isAdminPreview: canViewMarketplaceVendorOverview,
     productCount: vendorProducts.length,
+    activeProductCount: vendorProducts.filter((product) => (product.status ?? "published") === "published").length,
+    outOfStockProductCount: vendorProducts.filter((product) => product.stock <= 0).length,
     orderCount: vendorOrders.length,
-    revenue: vendorOrders.reduce((sum, order) => sum + order.totalAmount, 0),
+    revenue,
+    monthlyRevenue,
+    todayRevenue,
+    totalEarnings,
+    availableBalance: Math.max(totalEarnings - pendingPayoutAmount - completedPayoutAmount, 0),
+    pendingPayoutAmount,
+    completedPayoutAmount,
+    pendingOrders: orderStatusCounts.pending ?? 0,
+    processingOrders: orderStatusCounts.processing ?? 0,
+    shippedOrders: orderStatusCounts.shipped ?? 0,
+    deliveredOrders: orderStatusCounts.delivered ?? 0,
+    cancelledOrders: orderStatusCounts.cancelled ?? 0,
+    returnRequests: orderStatusCounts.return_requested ?? 0,
+    customerCount: vendorCustomers.length,
+    openSupportTickets,
+    reviewCount,
+    averageRating: Number(averageRating.toFixed(1)),
+    lowStockProducts: vendorProducts.filter((product) => product.stock <= (product.lowStockThreshold ?? 5)).length,
     recentOrders: vendorOrders.slice(0, 8),
-    payouts: payouts.filter((payout) => payout.vendorId === vendorId).slice(0, 8),
+    products: vendorProducts.slice(0, 8),
+    customers: vendorCustomers.slice(0, 8),
+    payouts: vendorPayouts.slice(0, 8),
+    orderStatusCounts,
+    revenueByDay,
+    productPerformance: productPerformance.slice(0, 8),
   };
 }
 

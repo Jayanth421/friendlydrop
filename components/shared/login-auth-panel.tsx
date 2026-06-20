@@ -45,10 +45,10 @@ export function LoginAuthPanel({ storeName, brandPrefix, logoUrl, loginLeftImage
   const brandName = brandPrefix?.trim() ? `${brandPrefix.trim()} ${storeName}` : storeName;
 
   const redirect = useMemo(() => {
-    const target = searchParams.get("redirect") ?? "/account";
+    const target = searchParams.get("redirect") ?? "/";
 
     if (!target.startsWith("/") || target === "/login") {
-      return "/account";
+      return "/";
     }
 
     return target;

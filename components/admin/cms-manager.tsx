@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { CmsPageConfig } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MediaPickerButton } from "@/components/admin/media-library";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { normalizeMediaReference, resolveMediaUrl } from "@/lib/media";
 
@@ -75,6 +76,7 @@ function mapPageToForm(page: CmsPageConfig): CmsForm {
 export function CmsManager({ initialPages }: { initialPages: CmsPageConfig[] }) {
   const [pages, setPages] = useState(initialPages);
   const [form, setForm] = useState<CmsForm>(defaultForm());
+  const [editorMode, setEditorMode] = useState<"rich" | "html" | "source">("rich");
   const [saving, setSaving] = useState(false);
   const [uploadingHero, setUploadingHero] = useState(false);
 
@@ -131,7 +133,7 @@ export function CmsManager({ initialPages }: { initialPages: CmsPageConfig[] }) 
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folder", "cms");
-      formData.append("record", "false");
+      formData.append("record", "true");
       const response = await fetch("/api/uploads", {
         method: "POST",
         body: formData,
@@ -155,6 +157,22 @@ export function CmsManager({ initialPages }: { initialPages: CmsPageConfig[] }) 
     } finally {
       setUploadingHero(false);
     }
+  };
+
+  const insertMediaEmbed = (url: string) => {
+    const reference = normalizeMediaReference(url) ?? url;
+    const publicUrl = resolveMediaUrl(reference) || reference;
+    const extension = publicUrl.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
+    const embed =
+      extension === "pdf"
+        ? `<p><a href="${publicUrl}" target="_blank" rel="noreferrer">Download PDF</a></p>`
+        : `<figure><img src="${publicUrl}" alt="" /></figure>`;
+
+    setForm((prev) => ({
+      ...prev,
+      content: prev.content ? `${prev.content}\n${embed}` : embed,
+    }));
+    toast.success("Media embed added");
   };
 
   const choosePreset = (slug: string) => {
@@ -213,7 +231,40 @@ export function CmsManager({ initialPages }: { initialPages: CmsPageConfig[] }) 
 
             <input className="h-9 rounded border border-slate-200 px-2 text-sm md:col-span-2" placeholder="Excerpt" value={form.excerpt} onChange={(event) => setForm({ ...form, excerpt: event.target.value })} />
 
-            <textarea className="min-h-[160px] rounded border border-slate-200 px-2 py-2 text-sm md:col-span-2" placeholder="Page content (supports plain text with new lines)" value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} />
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="inline-flex rounded-md border border-slate-200 bg-white p-1">
+                  {(["rich", "html", "source"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setEditorMode(mode)}
+                      className={`rounded px-3 py-1.5 text-xs font-medium capitalize ${editorMode === mode ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+                    >
+                      {mode === "rich" ? "Rich Text" : mode === "html" ? "HTML" : "Source"}
+                    </button>
+                  ))}
+                </div>
+                <MediaPickerButton label="Embed Media" accept="all" folder="cms" onSelect={insertMediaEmbed} />
+              </div>
+              {editorMode === "rich" ? (
+                <div
+                  contentEditable
+                  suppressContentEditableWarning
+                  className="min-h-[220px] rounded border border-slate-200 bg-white px-3 py-2 text-sm leading-7 outline-none focus:border-slate-400"
+                  onBlur={(event) => setForm((prev) => ({ ...prev, content: event.currentTarget.innerHTML }))}
+                  dangerouslySetInnerHTML={{ __html: form.content }}
+                />
+              ) : (
+                <textarea
+                  className="min-h-[220px] rounded border border-slate-200 px-2 py-2 font-mono text-sm md:col-span-2"
+                  placeholder={editorMode === "html" ? "Write HTML content and embed QOENS media URLs..." : "Source code view"}
+                  value={form.content}
+                  onChange={(event) => setForm({ ...form, content: event.target.value })}
+                  readOnly={editorMode === "source"}
+                />
+              )}
+            </div>
 
             <div className="space-y-2 md:col-span-2">
               <input className="h-9 w-full rounded border border-slate-200 px-2 text-sm" placeholder="Hero media path" value={form.heroImageUrl} onChange={(event) => setForm({ ...form, heroImageUrl: event.target.value })} />
@@ -228,6 +279,10 @@ export function CmsManager({ initialPages }: { initialPages: CmsPageConfig[] }) 
                       uploadHeroImage(file);
                     }
                   }}
+                />
+                <MediaPickerButton
+                  folder="cms"
+                  onSelect={(url) => setForm((prev) => ({ ...prev, heroImageUrl: normalizeMediaReference(url) ?? url }))}
                 />
                 {uploadingHero ? <span className="text-xs text-slate-500">Uploading hero image...</span> : null}
               </div>

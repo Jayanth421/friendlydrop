@@ -20,6 +20,9 @@ export default async function AdminCustomersPage() {
         <CardTitle>Customer Management (CRM)</CardTitle>
       </CardHeader>
       <CardContent>
+        <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+          To give vendor dashboard access, find the user below and change Role to vendor. The user must log out and log in again after the role change.
+        </div>
         <div className="mb-4 grid gap-2 sm:grid-cols-3">
           <div className="rounded border border-slate-200 p-3 text-sm">
             <p className="text-slate-500">Total customers</p>

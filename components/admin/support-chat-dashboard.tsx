@@ -152,7 +152,7 @@ export function SupportChatDashboard({ initialTickets }: { initialTickets: Suppo
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", "support-chat");
-    formData.append("record", "false");
+    formData.append("record", "true");
     const response = await fetch("/api/uploads", { method: "POST", body: formData });
     const payload = (await response.json()) as { path?: string; imageUrl?: string; error?: string };
     if (!response.ok) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ZodError } from "zod";
 import { requireApiPermission } from "@/lib/auth/api";
 import { createSlug } from "@/lib/utils";
 import { productSchema } from "@/lib/validators";
@@ -8,6 +9,32 @@ import { buildAutoProductSyncDraft } from "@/lib/product-page-builder";
 import { normalizeMediaReference } from "@/lib/media";
 
 export const runtime = "nodejs";
+
+function toProductErrorResponse(error: unknown, fallback: string) {
+  if (error instanceof ZodError) {
+    return NextResponse.json(
+      {
+        error: "Product validation failed",
+        details: error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      },
+      { status: 400 },
+    );
+  }
+
+  const message = error instanceof Error ? error.message : fallback;
+  const status = message === "UNAUTHORIZED" ? 401 : message === "FORBIDDEN" ? 403 : 500;
+
+  return NextResponse.json(
+    {
+      error: fallback,
+      details: message,
+    },
+    { status },
+  );
+}
 
 export async function PATCH(request: NextRequest, { params }: { params: { productId: string } }) {
   try {
@@ -39,14 +66,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { produc
       },
     });
 
-    await upsertProductPageBuilderOverride({
-      productId: params.productId,
-      actorId: admin.uid,
-    });
-
     const after = await getProductById(params.productId);
-
-    await Promise.all([
+    const sideEffects = await Promise.allSettled([
+      upsertProductPageBuilderOverride({
+        productId: params.productId,
+        actorId: admin.uid,
+      }),
       logAdminActivity({
         actorId: admin.uid,
         actorName: admin.name,
@@ -65,10 +90,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { produc
       }),
     ]);
 
+    sideEffects.forEach((result) => {
+      if (result.status === "rejected") {
+        console.warn("Product update side effect failed:", result.reason);
+      }
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Could not update product" }, { status: 400 });
+    return toProductErrorResponse(error, "Could not update product");
   }
 }
 

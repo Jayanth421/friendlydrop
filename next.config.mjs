@@ -11,6 +11,7 @@ const nextConfig = {
       "m.media-amazon.com",
       "api.qrserver.com",
       "i.pinimg.com",
+      "dl.oqens.me",
     ],
     remotePatterns: [
       {
@@ -32,6 +33,10 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "i.pinimg.com",
+      },
+      {
+        protocol: "https",
+        hostname: "dl.oqens.me",
       },
     ],
   },

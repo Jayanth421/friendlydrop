@@ -1277,6 +1277,32 @@ export async function updateUploadModeration(uploadId: string, updates: Partial<
   await getAdminDb().collection("uploads").doc(uploadId).set(updates, { merge: true });
 }
 
+export async function deleteUploadRecordsByUrlOrPath(value: string) {
+  if (!isFirestoreReady()) {
+    return;
+  }
+
+  const db = getAdminDb();
+  const [imageUrlSnapshot, pathSnapshot] = await Promise.all([
+    db.collection("uploads").where("imageUrl", "==", value).limit(50).get(),
+    db.collection("uploads").where("path", "==", value).limit(50).get(),
+  ]);
+  const batch = db.batch();
+  const seen = new Set<string>();
+
+  for (const doc of [...imageUrlSnapshot.docs, ...pathSnapshot.docs]) {
+    if (seen.has(doc.id)) {
+      continue;
+    }
+    seen.add(doc.id);
+    batch.delete(doc.ref);
+  }
+
+  if (seen.size) {
+    await batch.commit();
+  }
+}
+
 export async function createOrder(order: Omit<Order, "id" | "createdAt" | "updatedAt">): Promise<Order> {
   ensureFirestoreReady();
 

@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MediaPickerButton } from "@/components/admin/media-library";
 import { normalizeMediaReference, resolveMediaUrl } from "@/lib/media";
 import { createSlug } from "@/lib/utils";
 
@@ -122,7 +123,7 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folder", "categories");
-      formData.append("record", "false");
+      formData.append("record", "true");
 
       const res = await fetch("/api/uploads", {
         method: "POST",
@@ -339,6 +340,10 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
                       if (file) handleUploadImage(file, false);
                     }}
                     className="text-xs text-stone-600 cursor-pointer"
+                  />
+                  <MediaPickerButton
+                    folder="categories"
+                    onSelect={(url) => setCreateForm((prev) => ({ ...prev, image: normalizeMediaReference(url) ?? url }))}
                   />
                   {createUploading && <span className="text-xs font-medium text-stone-500">Uploading...</span>}
                   {createForm.image ? (
@@ -570,6 +575,10 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
                       if (file) handleUploadImage(file, true);
                     }}
                     className="text-xs text-stone-600 cursor-pointer"
+                  />
+                  <MediaPickerButton
+                    folder="categories"
+                    onSelect={(url) => setEditForm((prev) => ({ ...prev, image: normalizeMediaReference(url) ?? url }))}
                   />
                   {editUploading && <span className="text-xs font-medium text-stone-500">Uploading...</span>}
                   {editForm.image ? (

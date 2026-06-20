@@ -16,7 +16,7 @@ export function MobileBottomNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  if (pathname.startsWith("/admin") || pathname === "/products") {
+  if (pathname.startsWith("/admin") || pathname.startsWith("/vendor") || pathname.startsWith("/vendors") || pathname === "/products") {
     return null;
   }
 

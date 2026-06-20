@@ -211,7 +211,7 @@ export function Navbar({ storeName, brandPrefix, logoUrl, menuEditor }: NavbarPr
     };
   }, [mobileMenuOpen]);
 
-  if (pathname.startsWith("/admin")) {
+  if (pathname.startsWith("/admin") || pathname.startsWith("/vendor") || pathname.startsWith("/vendors")) {
     return null;
   }
 

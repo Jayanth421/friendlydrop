@@ -105,7 +105,7 @@ export function CustomerSupportWidget() {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", "support-chat");
-    formData.append("record", "false");
+    formData.append("record", "true");
     const response = await fetch("/api/uploads", {
       method: "POST",
       headers: {

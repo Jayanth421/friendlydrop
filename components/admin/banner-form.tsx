@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MediaPickerButton } from "@/components/admin/media-library";
 import { normalizeMediaReference, resolveMediaUrl } from "@/lib/media";
 
 export function BannerForm() {
@@ -41,7 +42,7 @@ export function BannerForm() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folder", "banners");
-      formData.append("record", "false");
+      formData.append("record", "true");
 
       const response = await fetch("/api/uploads", {
         method: "POST",
@@ -119,29 +120,41 @@ export function BannerForm() {
       </select>
       <div className="space-y-2">
         <Input placeholder="Desktop media path" value={form.imageDesktop} onChange={(event) => setForm({ ...form, imageDesktop: event.target.value })} required />
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) uploadBannerImage(file, "desktop");
-          }}
-          className="block w-full text-xs"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) uploadBannerImage(file, "desktop");
+            }}
+            className="block text-xs"
+          />
+          <MediaPickerButton
+            folder="banners"
+            onSelect={(url) => setForm((prev) => ({ ...prev, imageDesktop: normalizeMediaReference(url) ?? url }))}
+          />
+        </div>
         {uploadingDesktop ? <p className="text-xs text-slate-500">Uploading desktop image...</p> : null}
         {form.imageDesktop ? <img src={resolveMediaUrl(form.imageDesktop) || ""} alt="Desktop preview" className="h-16 w-full rounded border object-cover" /> : null}
       </div>
       <div className="space-y-2">
         <Input placeholder="Mobile media path" value={form.imageMobile} onChange={(event) => setForm({ ...form, imageMobile: event.target.value })} />
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) uploadBannerImage(file, "mobile");
-          }}
-          className="block w-full text-xs"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) uploadBannerImage(file, "mobile");
+            }}
+            className="block text-xs"
+          />
+          <MediaPickerButton
+            folder="banners"
+            onSelect={(url) => setForm((prev) => ({ ...prev, imageMobile: normalizeMediaReference(url) ?? url }))}
+          />
+        </div>
         {uploadingMobile ? <p className="text-xs text-slate-500">Uploading mobile image...</p> : null}
         {form.imageMobile ? <img src={resolveMediaUrl(form.imageMobile) || ""} alt="Mobile preview" className="h-16 w-full rounded border object-cover" /> : null}
       </div>

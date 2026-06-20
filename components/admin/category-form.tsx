@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MediaPickerButton } from "@/components/admin/media-library";
 import { normalizeMediaReference, resolveMediaUrl } from "@/lib/media";
 
 export function CategoryForm() {
@@ -25,7 +26,7 @@ export function CategoryForm() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folder", "categories");
-      formData.append("record", "false");
+      formData.append("record", "true");
 
       const response = await fetch("/api/uploads", { method: "POST", body: formData });
       const data = (await response.json()) as { path?: string; imageUrl?: string; error?: string };
@@ -92,17 +93,23 @@ export function CategoryForm() {
       <Input className="sm:col-span-2" placeholder="Description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
       <div className="space-y-2">
         <Input placeholder="Category image media path" value={form.image} onChange={(event) => setForm({ ...form, image: event.target.value })} />
-        <input
-          type="file"
-          accept="image/*"
-          className="text-xs"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) {
-              uploadCategoryImage(file);
-            }
-          }}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="file"
+            accept="image/*"
+            className="text-xs"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                uploadCategoryImage(file);
+              }
+            }}
+          />
+          <MediaPickerButton
+            folder="categories"
+            onSelect={(url) => setForm((prev) => ({ ...prev, image: normalizeMediaReference(url) ?? url }))}
+          />
+        </div>
         {uploading ? <p className="text-xs text-slate-500">Uploading image...</p> : null}
         {form.image ? <img src={resolveMediaUrl(form.image) || ""} alt="Category preview" className="h-16 w-full rounded border object-cover" /> : null}
       </div>

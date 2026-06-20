@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
     const baseUrl = isSandbox
       ? "https://sandbox.cashfree.com/pg"
       : "https://api.cashfree.com/pg";
+    const modeLabel = isSandbox ? "sandbox" : "production";
 
     const response = await fetch(`${baseUrl}/orders/conn_test_${Date.now()}`, {
       method: "GET",
@@ -30,11 +31,11 @@ export async function POST(request: NextRequest) {
 
     // If Cashfree returns 404 (order not found), authentication succeeded.
     if (response.status === 404) {
-      return NextResponse.json({ ok: true, message: "Credentials are valid! Connection established successfully." });
+      return NextResponse.json({ ok: true, message: `Credentials are valid for ${modeLabel} mode. Connection established successfully.` });
     }
 
     if (response.ok) {
-      return NextResponse.json({ ok: true, message: "Credentials are valid! Connection established successfully." });
+      return NextResponse.json({ ok: true, message: `Credentials are valid for ${modeLabel} mode. Connection established successfully.` });
     }
 
     const errMsg = formatCashfreeErrorMessage(data?.message, `Cashfree returned status code ${response.status}`);

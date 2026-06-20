@@ -15,6 +15,27 @@ type OqensUploadResponse = {
   };
 };
 
+export type OqensFile = {
+  key: string;
+  name: string;
+  sizeBytes?: number;
+  contentType?: string;
+  publicUrl: string;
+  previewUrl: string;
+  updatedAt?: string;
+};
+
+type OqensListedItem =
+  | string
+  | { key?: string; name?: string; size?: number; sizeBytes?: number; contentType?: string; type?: string; url?: string; publicUrl?: string; cdnUrl?: string; updatedAt?: string; lastModified?: string };
+
+type OqensListResponse =
+  | Array<OqensListedItem>
+  | {
+      files?: OqensListedItem[];
+      data?: OqensListedItem[];
+    };
+
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
 }
@@ -44,6 +65,19 @@ export function getOqensPublicUrl(key: string) {
   return `${trimTrailingSlash(cdnBaseUrl)}/${encodePathSegments(key)}`;
 }
 
+function getOqensApiConfig() {
+  const apiKey = process.env.OQENS_API_KEY?.trim();
+
+  if (!apiKey) {
+    throw new Error("OQENS_NOT_CONFIGURED");
+  }
+
+  return {
+    apiKey,
+    apiBaseUrl: trimTrailingSlash(process.env.OQENS_API_BASE_URL?.trim() || DEFAULT_OQENS_API_BASE_URL),
+  };
+}
+
 function pickPublicUrl(payload: OqensUploadResponse, key: string) {
   return (
     payload.publicUrl ||
@@ -63,13 +97,7 @@ export async function uploadFileToOqens(input: {
   key: string;
   contentType: string;
 }) {
-  const apiKey = process.env.OQENS_API_KEY?.trim();
-
-  if (!apiKey) {
-    throw new Error("OQENS_NOT_CONFIGURED");
-  }
-
-  const apiBaseUrl = trimTrailingSlash(process.env.OQENS_API_BASE_URL?.trim() || DEFAULT_OQENS_API_BASE_URL);
+  const { apiKey, apiBaseUrl } = getOqensApiConfig();
   const formData = new FormData();
   formData.append("file", input.file, input.key);
 
@@ -108,4 +136,83 @@ export async function uploadFileToOqens(input: {
     publicUrl,
     response: payload,
   };
+}
+
+function normalizeListedFile(item: OqensListedItem): OqensFile | null {
+  const key = typeof item === "string" ? item : item.key || item.name || "";
+
+  if (!key) {
+    return null;
+  }
+
+  const publicUrl =
+    typeof item === "string"
+      ? getOqensPublicUrl(key)
+      : item.publicUrl || item.cdnUrl || item.url || getOqensPublicUrl(key);
+
+  if (!publicUrl) {
+    return null;
+  }
+
+  const fileName = key.split("/").pop() || key;
+  const contentType = typeof item === "string" ? undefined : item.contentType || item.type;
+
+  return {
+    key,
+    name: fileName,
+    sizeBytes: typeof item === "string" ? undefined : item.sizeBytes ?? item.size,
+    contentType,
+    publicUrl,
+    previewUrl: `${publicUrl}${publicUrl.includes("?") ? "&" : "?"}preview=true`,
+    updatedAt: typeof item === "string" ? undefined : item.updatedAt || item.lastModified,
+  };
+}
+
+export async function listOqensFiles() {
+  const { apiKey, apiBaseUrl } = getOqensApiConfig();
+  const response = await fetch(`${apiBaseUrl}/api/bucket/list`, {
+    method: "GET",
+    headers: {
+      "X-API-Key": apiKey,
+    },
+    cache: "no-store",
+  });
+
+  const text = await response.text();
+  let payload: OqensListResponse = [];
+
+  if (text) {
+    try {
+      payload = JSON.parse(text) as OqensListResponse;
+    } catch {
+      payload = [];
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(text || `Oqens list failed with status ${response.status}`);
+  }
+
+  const files = Array.isArray(payload) ? payload : payload.files || payload.data || [];
+  return files.map(normalizeListedFile).filter(Boolean) as OqensFile[];
+}
+
+export async function deleteOqensFile(key: string) {
+  const { apiKey, apiBaseUrl } = getOqensApiConfig();
+  const response = await fetch(`${apiBaseUrl}/api/bucket/delete`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": apiKey,
+    },
+    body: JSON.stringify({ key }),
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(text || `Oqens delete failed with status ${response.status}`);
+  }
+
+  return { ok: true };
 }

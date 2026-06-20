@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { MediaPickerButton } from "@/components/admin/media-library";
 import {
   Select,
   SelectContent,
@@ -100,6 +101,24 @@ function emptyVariant(index: number): ProductVariant {
     price: 0,
     stock: 0,
   };
+}
+
+async function readProductSaveError(response: Response) {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    return `Could not save product (HTTP ${response.status})`;
+  }
+
+  try {
+    const data = JSON.parse(text) as { error?: string; details?: unknown };
+    if (data.details) {
+      return `${data.error ?? "Could not save product"}: ${JSON.stringify(data.details)}`;
+    }
+    return data.error ?? text;
+  } catch {
+    return text;
+  }
 }
 
 export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValues }) {
@@ -214,7 +233,7 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folder", folder);
-      formData.append("record", "false");
+      formData.append("record", "true");
 
       const response = await fetch("/api/uploads", {
         method: "POST",
@@ -364,8 +383,7 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Could not save product");
+        throw new Error(await readProductSaveError(response));
       }
 
       toast.success(defaultValues?.id ? "Product updated successfully" : "Product created successfully");
@@ -792,6 +810,18 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
               </div>
               
               <div className="flex items-center gap-2">
+                <MediaPickerButton
+                  label="Choose Images"
+                  folder="products"
+                  onSelect={(url) => {
+                    const normalized = normalizeMediaReference(url) ?? url;
+                    setForm((prev) => ({
+                      ...prev,
+                      images: prev.images.includes(normalized) ? prev.images : [...prev.images, normalized],
+                      primaryImage: prev.primaryImage || normalized,
+                    }));
+                  }}
+                />
                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-stone-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-stone-800 transition">
                   <Upload className="h-4 w-4" />
                   Upload Images
@@ -961,6 +991,12 @@ export function ProductForm({ defaultValues }: { defaultValues?: ProductFormValu
                         Saving...
                       </div>
                     )}
+                    <MediaPickerButton
+                      label="Choose Video"
+                      accept="video"
+                      folder="products"
+                      onSelect={(url) => setForm((prev) => ({ ...prev, videoUrl: normalizeMediaReference(url) ?? url }))}
+                    />
                   </div>
                 </div>
 

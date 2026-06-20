@@ -15,7 +15,7 @@ export function Footer({ storeName, brandPrefix, brandTagline, supportEmail, sup
   const pathname = usePathname();
   const brandName = brandPrefix?.trim() ? `${brandPrefix.trim()} ${storeName}` : storeName;
 
-  if (pathname.startsWith("/admin")) {
+  if (pathname.startsWith("/admin") || pathname.startsWith("/vendor") || pathname.startsWith("/vendors")) {
     return null;
   }
 
