@@ -9,6 +9,7 @@ import {
 } from "@/lib/product-page-builder";
 import {
   ActivityLog,
+  Address,
   AuditLog,
   CartItem,
   Coupon,
@@ -46,6 +47,33 @@ import {
   SocialShareConfig,
   SocialShareLink,
 } from "@/types";
+
+function normalizeAddressKey(address: Address) {
+  return [
+    address.line1,
+    address.line2 ?? "",
+    address.city,
+    address.state,
+    address.postalCode,
+    address.country,
+  ]
+    .map((value) => value.trim().toLowerCase())
+    .join("|");
+}
+
+function normalizeSavedAddress(address: Address): Address {
+  return {
+    id: address.id ?? nanoid(10),
+    fullName: address.fullName.trim(),
+    phone: address.phone.trim(),
+    line1: address.line1.trim(),
+    ...(address.line2?.trim() ? { line2: address.line2.trim() } : {}),
+    city: address.city.trim(),
+    state: address.state.trim(),
+    postalCode: address.postalCode.trim(),
+    country: address.country.trim(),
+  };
+}
 
 function isFirestoreReady() {
   return Boolean(process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
@@ -1057,6 +1085,28 @@ export async function addUserInternalNote(userId: string, note: string) {
   await userRef.set({ notes: notes.slice(0, 20), updatedAt: new Date().toISOString() }, { merge: true });
 }
 
+export async function saveUserDeliveryAddress(userId: string, address: Address) {
+  if (!isFirestoreReady()) {
+    return;
+  }
+
+  const normalizedAddress = normalizeSavedAddress(address);
+  const userRef = getAdminDb().collection("users").doc(userId);
+  const snapshot = await userRef.get();
+  const existingAddresses = ((snapshot.data()?.addresses as Address[] | undefined) ?? []).map(normalizeSavedAddress);
+  const nextKey = normalizeAddressKey(normalizedAddress);
+  const withoutDuplicate = existingAddresses.filter((item) => normalizeAddressKey(item) !== nextKey);
+
+  await userRef.set(
+    {
+      phone: normalizedAddress.phone,
+      addresses: [normalizedAddress, ...withoutDuplicate].slice(0, 5),
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true },
+  );
+}
+
 export async function getCouponByCode(code: string): Promise<Coupon | null> {
   if (!isFirestoreReady()) {
     return FALLBACK_COUPONS.find((coupon) => coupon.code === code.toUpperCase()) ?? null;
@@ -1248,6 +1298,9 @@ export async function createOrder(order: Omit<Order, "id" | "createdAt" | "updat
   };
 
   await getAdminDb().collection("orders").doc(id).set(payload);
+  await saveUserDeliveryAddress(order.userId, order.address).catch((error) => {
+    console.error(`Could not save delivery address for user "${order.userId}":`, error);
+  });
 
   const transactionStatus =
     order.payment.status === "success"

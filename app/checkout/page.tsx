@@ -124,14 +124,20 @@ export default function CheckoutPage() {
   const orderSubtotal = subtotal();
   const upiId = process.env.NEXT_PUBLIC_UPI_ID ?? "friendlydrop@upi";
   const upiPayeeName = process.env.NEXT_PUBLIC_UPI_PAYEE_NAME ?? "FriendlyDrop";
-  const hasAnyAvailablePaymentMethod =
-    pricingConfig.payments.availableGateways.cashfree ||
-    pricingConfig.payments.availableGateways.upi_offline ||
-    pricingConfig.payments.availableGateways.cod;
+  const onlinePaymentLabels = [
+    pricingConfig.payments.availableMethods.upi ? "UPI" : null,
+    pricingConfig.payments.availableMethods.cards ? "Cards" : null,
+    pricingConfig.payments.availableMethods.netBanking ? "Net banking" : null,
+    pricingConfig.payments.availableMethods.wallet ? "Wallets" : null,
+  ].filter((item): item is string => Boolean(item));
+  const cashfreeAvailable = pricingConfig.payments.availableGateways.cashfree && onlinePaymentLabels.length > 0;
+  const offlineUpiAvailable = pricingConfig.payments.availableGateways.upi_offline && pricingConfig.payments.availableMethods.upi;
+  const codAvailable = pricingConfig.payments.availableGateways.cod && pricingConfig.payments.availableMethods.cod;
+  const hasAnyAvailablePaymentMethod = cashfreeAvailable || offlineUpiAvailable || codAvailable;
   const selectedPaymentAvailable =
-    (paymentMethod === "cashfree" && pricingConfig.payments.availableGateways.cashfree) ||
-    (paymentMethod === "upi-offline" && pricingConfig.payments.availableGateways.upi_offline && pricingConfig.payments.availableMethods.upi) ||
-    (paymentMethod === "cod" && pricingConfig.payments.availableGateways.cod && pricingConfig.payments.availableMethods.cod);
+    (paymentMethod === "cashfree" && cashfreeAvailable) ||
+    (paymentMethod === "upi-offline" && offlineUpiAvailable) ||
+    (paymentMethod === "cod" && codAvailable);
 
   useEffect(() => {
     const params = new URLSearchParams({
@@ -191,22 +197,33 @@ export default function CheckoutPage() {
 
         setPaymentMethod((current) => {
           if (
-            (current === "cashfree" && nextConfig.payments.availableGateways.cashfree) ||
-            (current === "upi-offline" && nextConfig.payments.availableGateways.upi_offline) ||
-            (current === "cod" && nextConfig.payments.availableGateways.cod)
+            (current === "cashfree" &&
+              nextConfig.payments.availableGateways.cashfree &&
+              (nextConfig.payments.availableMethods.upi ||
+                nextConfig.payments.availableMethods.cards ||
+                nextConfig.payments.availableMethods.netBanking ||
+                nextConfig.payments.availableMethods.wallet)) ||
+            (current === "upi-offline" && nextConfig.payments.availableGateways.upi_offline && nextConfig.payments.availableMethods.upi) ||
+            (current === "cod" && nextConfig.payments.availableGateways.cod && nextConfig.payments.availableMethods.cod)
           ) {
             return current;
           }
 
-          if (nextConfig.payments.availableGateways.cod) {
+          if (nextConfig.payments.availableGateways.cod && nextConfig.payments.availableMethods.cod) {
             return "cod";
           }
 
-          if (nextConfig.payments.availableGateways.upi_offline) {
+          if (nextConfig.payments.availableGateways.upi_offline && nextConfig.payments.availableMethods.upi) {
             return "upi-offline";
           }
 
-          if (nextConfig.payments.availableGateways.cashfree) {
+          if (
+            nextConfig.payments.availableGateways.cashfree &&
+            (nextConfig.payments.availableMethods.upi ||
+              nextConfig.payments.availableMethods.cards ||
+              nextConfig.payments.availableMethods.netBanking ||
+              nextConfig.payments.availableMethods.wallet)
+          ) {
             return "cashfree";
           }
 
@@ -473,37 +490,59 @@ export default function CheckoutPage() {
           <h2 className="text-lg font-semibold text-ink">Payment Method</h2>
           {pricingConfig.payments.message ? <p className="mt-2 text-xs text-amber-600">{pricingConfig.payments.message}</p> : null}
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="paymentMethod"
-                checked={paymentMethod === "cashfree"}
-                onChange={() => setPaymentMethod("cashfree")}
-                disabled={!pricingConfig.payments.availableGateways.cashfree}
-              />
-              Cashfree Payments
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="paymentMethod"
-                checked={paymentMethod === "upi-offline"}
-                onChange={() => setPaymentMethod("upi-offline")}
-                disabled={!pricingConfig.payments.availableGateways.upi_offline || !pricingConfig.payments.availableMethods.upi}
-              />
-              UPI Offline
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="paymentMethod"
-                checked={paymentMethod === "cod"}
-                onChange={() => setPaymentMethod("cod")}
-                disabled={!pricingConfig.payments.availableGateways.cod || !pricingConfig.payments.availableMethods.cod}
-              />
-              Cash on Delivery
-            </label>
+            {cashfreeAvailable ? (
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  checked={paymentMethod === "cashfree"}
+                  onChange={() => setPaymentMethod("cashfree")}
+                />
+                Online payment
+              </label>
+            ) : null}
+            {offlineUpiAvailable ? (
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  checked={paymentMethod === "upi-offline"}
+                  onChange={() => setPaymentMethod("upi-offline")}
+                />
+                UPI Offline
+              </label>
+            ) : null}
+            {codAvailable ? (
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  checked={paymentMethod === "cod"}
+                  onChange={() => setPaymentMethod("cod")}
+                />
+                Cash on Delivery
+              </label>
+            ) : null}
           </div>
+          {hasAnyAvailablePaymentMethod ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {cashfreeAvailable
+                ? onlinePaymentLabels.map((label) => (
+                    <span key={label} className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                      {label}
+                    </span>
+                  ))
+                : null}
+              {offlineUpiAvailable ? (
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">Manual UPI</span>
+              ) : null}
+              {codAvailable ? (
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">COD</span>
+              ) : null}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-600">No payment method is available for this order right now.</p>
+          )}
           {pricingConfig.payments.availableMethods.cod && !pricingConfig.payments.availableGateways.cod ? (
             <p className="mt-2 text-xs text-amber-600">
               COD is enabled in admin, but it is not available for this cart total or pincode.
@@ -565,7 +604,9 @@ export default function CheckoutPage() {
               <p className="mt-1">Keep {formatCurrency(summary.total)} ready at delivery. COD availability is controlled by order value and pincode in Admin Payment Settings.</p>
             </div>
           ) : (
-            <p className="mt-2 text-xs text-slate-500">UPI, cards, and net banking are controlled in Admin Payment Settings.</p>
+            <p className="mt-2 text-xs text-slate-500">
+              Accepted online methods: {onlinePaymentLabels.length ? onlinePaymentLabels.join(", ") : "configured by admin"}.
+            </p>
           )}
 
           <h3 className="mt-5 text-sm font-semibold text-ink">Delivery Priority</h3>
