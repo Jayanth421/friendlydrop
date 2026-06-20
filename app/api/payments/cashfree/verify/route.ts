@@ -20,13 +20,46 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "order_id is required" }, { status: 400 });
     }
 
-    // 1. Check if the order is already successfully created in orders collection
-    const existingOrder = await getOrder(orderId);
-    if (existingOrder) {
-      return NextResponse.json({ ok: true, order: existingOrder });
+    const pendingRef = getAdminDb().collection("pendingOrders").doc(orderId);
+    const pendingSnapshot = await pendingRef.get();
+
+    if (!pendingSnapshot.exists) {
+      return NextResponse.json({ error: "Pending order draft not found. Webhook might process it shortly." }, { status: 404 });
     }
 
-    // 2. Fetch store settings and query Cashfree API directly
+    const pending = pendingSnapshot.data() as {
+      userId: string;
+      userName: string;
+      userEmail?: string;
+      totals: {
+        total: number;
+        subtotal?: number;
+        discountAmount?: number;
+        taxRate?: number;
+        taxAmount?: number;
+        deliveryFee?: number;
+      };
+      orderDraft: {
+        items: any[];
+        priority?: "normal" | "express";
+        address: any;
+        couponCode?: string;
+      };
+      finalizedOrderId?: string;
+    };
+
+    if (pending.userId !== user.uid) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    if (pending.finalizedOrderId) {
+      const finalizedOrder = await getOrder(pending.finalizedOrderId);
+      if (finalizedOrder) {
+        return NextResponse.json({ ok: true, order: finalizedOrder });
+      }
+    }
+
+    // 1. Fetch store settings and query Cashfree API directly
     const settings = await getStoreSettings();
     const cfOrder = await getCashfreeOrder(orderId, settings);
 
@@ -70,44 +103,7 @@ export async function GET(request: NextRequest) {
     const paymentGroup = successfulPayment?.payment_group || "online";
     const paymentTime = successfulPayment?.payment_time || new Date().toISOString();
 
-    // 4. Retrieve order draft from pendingOrders collection
-    const pendingRef = getAdminDb().collection("pendingOrders").doc(orderId);
-    const pendingSnapshot = await pendingRef.get();
-
-    if (!pendingSnapshot.exists) {
-      return NextResponse.json({ error: "Pending order draft not found. Webhook might process it shortly." }, { status: 404 });
-    }
-
-    const pending = pendingSnapshot.data() as {
-      userId: string;
-      userName: string;
-      userEmail?: string;
-      totals: {
-        total: number;
-        subtotal?: number;
-        discountAmount?: number;
-        taxRate?: number;
-        taxAmount?: number;
-        deliveryFee?: number;
-      };
-      orderDraft: {
-        items: any[];
-        priority?: "normal" | "express";
-        address: any;
-        couponCode?: string;
-      };
-      finalizedOrderId?: string;
-    };
-
-    // Idempotency check: if the pending draft is already finalized, retrieve the created order
-    if (pending.finalizedOrderId) {
-      const finalizedOrder = await getOrder(pending.finalizedOrderId);
-      if (finalizedOrder) {
-        return NextResponse.json({ ok: true, order: finalizedOrder });
-      }
-    }
-
-    // 5. Finalize and create the permanent order in Firestore
+    // 2. Finalize and create the permanent order in Firestore
     const status = settings.operations.autoOrderConfirm ? "confirmed" : "pending";
     const subtotalAmount = pending.totals.subtotal ?? pending.orderDraft.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0);
     const discountAmount = pending.totals.discountAmount ?? 0;

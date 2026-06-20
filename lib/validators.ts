@@ -27,11 +27,18 @@ export const cartItemSchema = z.object({
   customImageUrl: mediaReferenceSchema.optional(),
 });
 
+const checkoutCartItemSchema = z.object({
+  productId: z.string().min(1),
+  quantity: z.number().int().min(1).max(20),
+  variantId: z.string().optional(),
+  customImageUrl: mediaReferenceSchema.optional(),
+});
+
 export const createOrderSchema = z.object({
-  items: z.array(cartItemSchema).min(1),
+  items: z.array(checkoutCartItemSchema).min(1),
   address: addressSchema,
   couponCode: z.string().trim().optional(),
-  paymentMethod: z.enum(["cashfree", "upi-offline", "razorpay", "stripe"]),
+  paymentMethod: z.enum(["cashfree", "upi-offline", "cod", "razorpay", "stripe"]),
   priority: z.enum(["express", "normal"]).optional().default("normal"),
 });
 

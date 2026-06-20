@@ -1,17 +1,8 @@
 import { nanoid } from "nanoid";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth/api";
-import { couponValidationSchema, upiOfflinePaymentSchema } from "@/lib/validators";
-import {
-  createOrder,
-  getCouponByCode,
-  getOrder,
-  getProductById,
-  getStoreSettings,
-  getTransactionByProofTransactionId,
-  saveCart,
-} from "@/lib/firebase/firestore";
-import { getUserById } from "@/lib/firebase/firestore";
+import { couponValidationSchema, createOrderSchema } from "@/lib/validators";
+import { createOrder, getCouponByCode, getProductById, getStoreSettings, getUserById, saveCart } from "@/lib/firebase/firestore";
 import { calculateCheckoutSummary } from "@/lib/checkout-pricing";
 import { calculateDeliveryQuote, canUseGateway } from "@/lib/settings-engine";
 import { publishSystemEvent } from "@/lib/system-events";
@@ -77,8 +68,7 @@ async function calculateTotal(input: {
   }
 
   const [settings, profile] = await Promise.all([getStoreSettings(), getUserById(input.userId)]);
-  const isFirstOrder = (profile?.orderCount ?? 0) === 0;
-  const gatewayCheck = canUseGateway(settings, "upi_offline", {
+  const gatewayCheck = canUseGateway(settings, "cod", {
     subtotal,
     postalCode: input.address.postalCode,
     city: input.address.city,
@@ -89,6 +79,7 @@ async function calculateTotal(input: {
     throw new Error(gatewayCheck.reason);
   }
 
+  const isFirstOrder = (profile?.orderCount ?? 0) === 0;
   const deliveryQuote = calculateDeliveryQuote(settings, {
     subtotal: Math.max(subtotal - discountAmount, 0),
     postalCode: input.address.postalCode,
@@ -118,20 +109,22 @@ async function calculateTotal(input: {
 export async function POST(request: NextRequest) {
   let actorId = "anonymous";
   let idempotencyKey: string | null = request.headers.get("Idempotency-Key");
+
   try {
     const user = await requireApiUser(request);
     actorId = user.uid;
     assertTrustedMutationRequest(request);
     assertRateLimit({
-      key: buildRateLimitKey({ request, scope: "payments:upi-offline", actorId: user.uid }),
+      key: buildRateLimitKey({ request, scope: "payments:cod", actorId: user.uid }),
       max: 6,
       windowMs: 60_000,
     });
-    const payload = upiOfflinePaymentSchema.parse(await request.json());
-    idempotencyKey = idempotencyKey || `upi:${payload.transactionId?.trim() || payload.proofImageUrl}`;
+
+    const payload = createOrderSchema.parse(await request.json());
+    idempotencyKey = idempotencyKey || `cod:${user.uid}:${Date.now()}`;
 
     const idempotency = await beginIdempotentRequest({
-      scope: "payments:upi-offline",
+      scope: "payments:cod",
       actorId: user.uid,
       key: idempotencyKey,
     });
@@ -141,78 +134,50 @@ export async function POST(request: NextRequest) {
     }
 
     if (idempotency.mode === "in_progress") {
-      return NextResponse.json({ error: "UPI proof submission already in progress" }, { status: 409 });
+      return NextResponse.json({ error: "COD order submission already in progress" }, { status: 409 });
     }
 
-    if (payload.orderDraft.paymentMethod !== "upi-offline") {
+    if (payload.paymentMethod !== "cod") {
       await failIdempotentRequest({
-        scope: "payments:upi-offline",
+        scope: "payments:cod",
         actorId: user.uid,
         key: idempotencyKey,
         errorMessage: "invalid_payment_method",
       });
-      return NextResponse.json({ error: "Invalid payment method for UPI route" }, { status: 400 });
-    }
-
-    const normalizedTransactionId = payload.transactionId?.trim();
-    if (normalizedTransactionId) {
-      const existingTransaction = await getTransactionByProofTransactionId(normalizedTransactionId);
-      if (existingTransaction) {
-        const existingOrder = await getOrder(existingTransaction.orderId);
-        if (existingOrder) {
-          const responseBody = {
-            ok: true,
-            order: existingOrder,
-            message: "UPI payment proof already submitted.",
-            replayed: true,
-          };
-          await completeIdempotentRequest({
-            scope: "payments:upi-offline",
-            actorId: user.uid,
-            key: idempotencyKey,
-            responseStatus: 200,
-            responseBody,
-          });
-          return NextResponse.json(responseBody);
-        }
-      }
+      return NextResponse.json({ error: "Invalid payment method for COD route" }, { status: 400 });
     }
 
     const totals = await calculateTotal({
       userId: user.uid,
-      items: payload.orderDraft.items,
-      couponCode: payload.orderDraft.couponCode,
-      priority: payload.orderDraft.priority,
+      items: payload.items,
+      couponCode: payload.couponCode,
+      priority: payload.priority,
       address: {
-        postalCode: payload.orderDraft.address.postalCode,
-        city: payload.orderDraft.address.city,
+        postalCode: payload.address.postalCode,
+        city: payload.address.city,
       },
     });
 
-    const generatedPaymentId = normalizedTransactionId || `UPI-${Date.now()}-${nanoid(5)}`;
+    const paymentId = `COD-${Date.now()}-${nanoid(5)}`;
     const order = await createOrder({
       userId: user.uid,
       items: totals.secureItems,
-      priority: payload.orderDraft.priority ?? "normal",
+      priority: payload.priority ?? "normal",
       totalAmount: totals.total,
       subtotalAmount: totals.subtotal,
       taxRate: totals.taxRate,
       taxAmount: totals.taxAmount,
       deliveryFee: totals.deliveryFee,
-      paymentId: generatedPaymentId,
+      paymentId,
       status: "pending",
-      address: payload.orderDraft.address,
-      couponCode: payload.orderDraft.couponCode,
+      address: payload.address,
+      couponCode: payload.couponCode,
       discountAmount: totals.discountAmount,
       payment: {
-        provider: "upi_offline",
-        paymentId: generatedPaymentId,
-        orderId: `upi-${Date.now()}`,
-        transactionId: normalizedTransactionId || undefined,
+        provider: "cod",
+        paymentId,
+        orderId: paymentId,
         status: "pending",
-        proofImageUrl: payload.proofImageUrl,
-        proofStatus: "pending",
-        upiVpa: payload.upiVpa.trim(),
       },
     });
 
@@ -221,24 +186,24 @@ export async function POST(request: NextRequest) {
     await publishSystemEvent({
       type: "checkout_initiated",
       module: "payments",
-      source: "api:payments-upi",
+      source: "api:payments-cod",
       userId: user.uid,
+      orderId: order.id,
       payload: {
-        provider: "upi_offline",
-        orderId: order.id,
+        provider: "cod",
         amount: totals.total,
-        proofStatus: "pending",
+        deliveryZone: totals.deliveryQuote.zoneName,
       },
     });
 
     const responseBody = {
       ok: true,
       order,
-      message: "UPI payment proof submitted. Your order is pending admin verification.",
+      message: "COD order placed. Please pay when your order is delivered.",
     };
 
     await completeIdempotentRequest({
-      scope: "payments:upi-offline",
+      scope: "payments:cod",
       actorId: user.uid,
       key: idempotencyKey,
       responseStatus: 200,
@@ -251,14 +216,15 @@ export async function POST(request: NextRequest) {
     if (guardError) {
       return guardError;
     }
+
     await failIdempotentRequest({
-      scope: "payments:upi-offline",
+      scope: "payments:cod",
       actorId,
       key: idempotencyKey,
-      errorMessage: error instanceof Error ? error.message : "upi_submission_failed",
+      errorMessage: error instanceof Error ? error.message : "cod_submission_failed",
     }).catch(() => undefined);
+
     console.error(error);
-    return NextResponse.json({ error: "Could not submit UPI payment proof" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not place COD order" }, { status: 400 });
   }
 }
-

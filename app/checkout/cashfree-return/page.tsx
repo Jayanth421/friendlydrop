@@ -28,9 +28,12 @@ function CashfreeReturnContent() {
     }
 
     let checkAttempts = 0;
-    const maxAttempts = 3;
+    const maxAttempts = 6;
+    const retryableStatuses = new Set(["ACTIVE", "PENDING", "PAYMENT_PENDING", "IN_PROGRESS"]);
 
     const verifyPayment = async () => {
+      let shouldRetry = false;
+
       try {
         const response = await fetch(`/api/payments/cashfree/verify?order_id=${orderId}`);
         const data = await response.json();
@@ -49,9 +52,10 @@ function CashfreeReturnContent() {
             router.replace(`/orders/${data.order.id}`);
           }, 2500);
         } else {
-          // If it is pending, retry a couple of times before declaring failure
-          if (data.status === "PENDING" && checkAttempts < maxAttempts) {
+          const nextStatus = String(data.status ?? "").toUpperCase();
+          if (retryableStatuses.has(nextStatus) && checkAttempts < maxAttempts) {
             checkAttempts++;
+            shouldRetry = true;
             setTimeout(verifyPayment, 3000);
           } else {
             setStatus("failed");
@@ -63,7 +67,7 @@ function CashfreeReturnContent() {
         setStatus("failed");
         setErrorMessage("An error occurred while confirming payment status.");
       } finally {
-        if (checkAttempts === 0 || checkAttempts >= maxAttempts) {
+        if (!shouldRetry) {
           setLoading(false);
         }
       }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiPermission } from "@/lib/auth/api";
+import { formatCashfreeErrorMessage } from "@/lib/payments/cashfree";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, message: "Credentials are valid! Connection established successfully." });
     }
 
-    const errMsg = data?.message || `Cashfree returned status code ${response.status}`;
+    const errMsg = formatCashfreeErrorMessage(data?.message, `Cashfree returned status code ${response.status}`);
     return NextResponse.json({ ok: false, error: errMsg }, { status: 400 });
   } catch (error) {
     console.error("Cashfree test connection error:", error);

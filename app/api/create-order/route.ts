@@ -29,7 +29,7 @@ async function buildSecureItems(items: Array<{ productId: string; quantity: numb
       name: product.name,
       price: product.price,
       quantity: item.quantity,
-      image: product.images[0],
+      image: product.images[0] ?? product.primaryImage ?? "",
       category: product.category,
       weightKg: Math.max(Number(product.weightGrams ?? 500) / 1000, 0.1),
       customImageUrl: item.customImageUrl,
@@ -184,14 +184,14 @@ export async function POST(request: NextRequest) {
 
     const payload = createOrderSchema.parse(await request.json());
 
-    if (payload.paymentMethod === "upi-offline") {
+    if (payload.paymentMethod === "upi-offline" || payload.paymentMethod === "cod") {
       await failIdempotentRequest({
         scope: "checkout:create-order",
         actorId: user.uid,
         key: idempotencyKey,
         errorMessage: "invalid_payment_method",
       });
-      return NextResponse.json({ error: "Use /api/payments/upi for offline UPI submissions" }, { status: 400 });
+      return NextResponse.json({ error: "Use the dedicated offline payment endpoint for this method" }, { status: 400 });
     }
 
     const { settings, ...totals } = await calculateTotal({
@@ -370,7 +370,7 @@ export async function POST(request: NextRequest) {
       }).catch(() => undefined);
     }
     console.error(error);
-    return NextResponse.json({ error: "Could not create order" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not create order" }, { status: 400 });
   }
 }
 

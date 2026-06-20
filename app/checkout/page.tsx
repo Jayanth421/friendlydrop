@@ -13,13 +13,20 @@ import { Input } from "@/components/ui/input";
 
 declare global {
   interface Window {
-    Cashfree: (options: { mode: "sandbox" | "production" }) => {
+    Cashfree?: (options: { mode: "sandbox" | "production" }) => {
       checkout: (options: { paymentSessionId: string; redirectTarget?: string }) => Promise<{ error?: { message: string }; redirect?: boolean }>;
     };
   }
 }
 
-type PaymentMethod = "cashfree" | "upi-offline";
+type PaymentMethod = "cashfree" | "upi-offline" | "cod";
+type CreateOrderResponse = {
+  provider?: "cashfree" | "razorpay" | "stripe";
+  paymentSessionId?: string;
+  isSandbox?: boolean;
+  url?: string;
+  error?: string;
+};
 
 function buildClientIdempotencyKey(scope: string) {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -27,6 +34,34 @@ function buildClientIdempotencyKey(scope: string) {
   }
 
   return `${scope}:${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function loadCashfreeSdk() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Cashfree checkout is only available in the browser."));
+  }
+
+  if (window.Cashfree) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const existingScript = document.getElementById("cashfree-sdk");
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Could not load Cashfree checkout.")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "cashfree-sdk";
+    script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load Cashfree checkout."));
+    document.head.appendChild(script);
+  });
 }
 
 export default function CheckoutPage() {
@@ -61,8 +96,9 @@ export default function CheckoutPage() {
       availableGateways: {
         cashfree: true,
         upi_offline: true,
+        cod: true,
       },
-      fallbackGateway: "cashfree" as "cashfree" | "razorpay" | "stripe" | "upi_offline",
+      fallbackGateway: "cashfree" as "cashfree" | "razorpay" | "stripe" | "upi_offline" | "cod",
       message: "",
     },
     operations: {
@@ -88,6 +124,14 @@ export default function CheckoutPage() {
   const orderSubtotal = subtotal();
   const upiId = process.env.NEXT_PUBLIC_UPI_ID ?? "friendlydrop@upi";
   const upiPayeeName = process.env.NEXT_PUBLIC_UPI_PAYEE_NAME ?? "FriendlyDrop";
+  const hasAnyAvailablePaymentMethod =
+    pricingConfig.payments.availableGateways.cashfree ||
+    pricingConfig.payments.availableGateways.upi_offline ||
+    pricingConfig.payments.availableGateways.cod;
+  const selectedPaymentAvailable =
+    (paymentMethod === "cashfree" && pricingConfig.payments.availableGateways.cashfree) ||
+    (paymentMethod === "upi-offline" && pricingConfig.payments.availableGateways.upi_offline && pricingConfig.payments.availableMethods.upi) ||
+    (paymentMethod === "cod" && pricingConfig.payments.availableGateways.cod && pricingConfig.payments.availableMethods.cod);
 
   useEffect(() => {
     const params = new URLSearchParams({
@@ -132,8 +176,9 @@ export default function CheckoutPage() {
               razorpay: Boolean(data.config.payments?.availableGateways?.razorpay ?? true),
               stripe: Boolean(data.config.payments?.availableGateways?.stripe ?? true),
               upi_offline: Boolean(data.config.payments?.availableGateways?.upi_offline ?? true),
+              cod: Boolean(data.config.payments?.availableGateways?.cod ?? true),
             },
-            fallbackGateway: (data.config.payments?.fallbackGateway ?? "cashfree") as "cashfree" | "razorpay" | "stripe" | "upi_offline",
+            fallbackGateway: (data.config.payments?.fallbackGateway ?? "cashfree") as "cashfree" | "razorpay" | "stripe" | "upi_offline" | "cod",
             message: data.config.payments?.message ?? "",
           },
           operations: {
@@ -147,17 +192,22 @@ export default function CheckoutPage() {
         setPaymentMethod((current) => {
           if (
             (current === "cashfree" && nextConfig.payments.availableGateways.cashfree) ||
-            (current === "upi-offline" && nextConfig.payments.availableGateways.upi_offline)
+            (current === "upi-offline" && nextConfig.payments.availableGateways.upi_offline) ||
+            (current === "cod" && nextConfig.payments.availableGateways.cod)
           ) {
             return current;
           }
 
-          if (nextConfig.payments.availableGateways.cashfree) {
-            return "cashfree";
+          if (nextConfig.payments.availableGateways.cod) {
+            return "cod";
           }
 
           if (nextConfig.payments.availableGateways.upi_offline) {
             return "upi-offline";
+          }
+
+          if (nextConfig.payments.availableGateways.cashfree) {
+            return "cashfree";
           }
 
           return current;
@@ -272,21 +322,39 @@ export default function CheckoutPage() {
       body: JSON.stringify(orderDraft),
     });
 
-    const createOrderData = await createOrderResponse.json();
+    const createOrderData = (await createOrderResponse.json()) as CreateOrderResponse;
 
     if (!createOrderResponse.ok) {
-      toast.error(createOrderData.error ?? "Could not create payment session");
+      throw new Error(createOrderData.error ?? "Could not create payment session");
+    }
+
+    if (createOrderData.provider === "stripe" && createOrderData.url) {
+      window.location.href = createOrderData.url;
       return;
+    }
+
+    if (createOrderData.provider !== "cashfree" || !createOrderData.paymentSessionId) {
+      throw new Error("Cashfree did not return a payment session. Please check gateway settings.");
+    }
+
+    await loadCashfreeSdk();
+
+    if (!window.Cashfree) {
+      throw new Error("Cashfree checkout is not available. Please retry.");
     }
 
     const cashfree = window.Cashfree({
       mode: createOrderData.isSandbox ? "sandbox" : "production",
     });
 
-    await cashfree.checkout({
+    const checkoutResult = await cashfree.checkout({
       paymentSessionId: createOrderData.paymentSessionId,
       redirectTarget: "_self",
     });
+
+    if (checkoutResult?.error?.message) {
+      throw new Error(checkoutResult.error.message);
+    }
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -302,11 +370,13 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (
-      !pricingConfig.payments.availableGateways.cashfree &&
-      !pricingConfig.payments.availableGateways.upi_offline
-    ) {
+    if (!hasAnyAvailablePaymentMethod) {
       toast.error(pricingConfig.payments.message || "No payment option is available right now.");
+      return;
+    }
+
+    if (!selectedPaymentAvailable) {
+      toast.error(pricingConfig.payments.message || "Selected payment option is not available for this order.");
       return;
     }
 
@@ -328,7 +398,7 @@ export default function CheckoutPage() {
     try {
       if (paymentMethod === "cashfree") {
         await handleCashfree(orderDraft);
-      } else {
+      } else if (paymentMethod === "upi-offline") {
         const response = await fetch("/api/payments/upi", {
           method: "POST",
           headers: {
@@ -352,6 +422,25 @@ export default function CheckoutPage() {
         clearCart();
         toast.success("UPI proof submitted. Order pending verification.");
         router.push(`/orders/${data.order.id}`);
+      } else {
+        const response = await fetch("/api/payments/cod", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": buildClientIdempotencyKey("checkout:cod"),
+          },
+          body: JSON.stringify(orderDraft),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.order?.id) {
+          throw new Error(data.error ?? "Unable to place COD order");
+        }
+
+        clearCart();
+        toast.success("COD order placed. Pay on delivery.");
+        router.push(`/orders/${data.order.id}`);
       }
     } catch (error) {
       console.error(error);
@@ -366,7 +455,7 @@ export default function CheckoutPage() {
       <form className="space-y-4" onSubmit={onSubmit}>
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <h1 className="font-display text-3xl font-bold text-ink">Checkout</h1>
-          <p className="mt-2 text-sm text-slate-600">Secure payments via Razorpay, Stripe, or offline UPI verification.</p>
+          <p className="mt-2 text-sm text-slate-600">Secure online payments, offline UPI verification, or cash on delivery.</p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Input required placeholder="Full Name" value={address.fullName} onChange={(event) => setAddress({ ...address, fullName: event.target.value })} />
@@ -383,7 +472,7 @@ export default function CheckoutPage() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="text-lg font-semibold text-ink">Payment Method</h2>
           {pricingConfig.payments.message ? <p className="mt-2 text-xs text-amber-600">{pricingConfig.payments.message}</p> : null}
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <label className="inline-flex items-center gap-2 text-sm">
               <input
                 type="radio"
@@ -404,7 +493,27 @@ export default function CheckoutPage() {
               />
               UPI Offline
             </label>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="paymentMethod"
+                checked={paymentMethod === "cod"}
+                onChange={() => setPaymentMethod("cod")}
+                disabled={!pricingConfig.payments.availableGateways.cod || !pricingConfig.payments.availableMethods.cod}
+              />
+              Cash on Delivery
+            </label>
           </div>
+          {pricingConfig.payments.availableMethods.cod && !pricingConfig.payments.availableGateways.cod ? (
+            <p className="mt-2 text-xs text-amber-600">
+              COD is enabled in admin, but it is not available for this cart total or pincode.
+            </p>
+          ) : null}
+          {pricingConfig.payments.availableMethods.cashfree && !pricingConfig.payments.availableGateways.cashfree ? (
+            <p className="mt-2 text-xs text-amber-600">
+              Cashfree is enabled in admin, but App ID and Secret Key are required before checkout can create a payment session.
+            </p>
+          ) : null}
 
           {paymentMethod === "upi-offline" ? (
             <div className="mt-4 space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -450,6 +559,11 @@ export default function CheckoutPage() {
                 onChange={(event) => setUpiTransactionId(event.target.value)}
               />
             </div>
+          ) : paymentMethod === "cod" ? (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <p className="font-semibold text-ink">Pay when your order arrives</p>
+              <p className="mt-1">Keep {formatCurrency(summary.total)} ready at delivery. COD availability is controlled by order value and pincode in Admin Payment Settings.</p>
+            </div>
           ) : (
             <p className="mt-2 text-xs text-slate-500">UPI, cards, and net banking are controlled in Admin Payment Settings.</p>
           )}
@@ -485,8 +599,8 @@ export default function CheckoutPage() {
             pricingConfig.operations.maintenanceMode ||
             !pricingConfig.operations.checkoutEnabled ||
             !pricingConfig.delivery.allowed ||
-            (!pricingConfig.payments.availableGateways.cashfree &&
-              !pricingConfig.payments.availableGateways.upi_offline)
+            !hasAnyAvailablePaymentMethod ||
+            !selectedPaymentAvailable
           }
         >
           {pricingConfig.operations.maintenanceMode || !pricingConfig.operations.checkoutEnabled
@@ -495,6 +609,8 @@ export default function CheckoutPage() {
               ? "Processing..."
               : paymentMethod === "upi-offline"
                 ? "Submit UPI Proof"
+                : paymentMethod === "cod"
+                  ? `Place COD Order ${formatCurrency(summary.total)}`
                 : `Pay ${formatCurrency(summary.total)}`}
         </Button>
       </form>

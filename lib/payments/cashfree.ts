@@ -1,5 +1,20 @@
 import { StoreSettings } from "@/types";
 
+export function formatCashfreeErrorMessage(message: unknown, statusText?: string) {
+  const rawMessage = typeof message === "string" && message.trim()
+    ? message.trim()
+    : statusText
+      ? `Cashfree error: ${statusText}`
+      : "Cashfree request failed";
+  const normalized = rawMessage.toLowerCase();
+
+  if (normalized.includes("ip") && normalized.includes("not allowed")) {
+    return "Cashfree rejected this server IP address. Add your hosting/server outbound IP to Cashfree's allowed IPs, or disable Cashfree and use COD/UPI until the allowlist is updated.";
+  }
+
+  return rawMessage;
+}
+
 function getCFConfig(settings?: StoreSettings) {
   const appId = settings?.payments?.cashfreeAppId || process.env.CASHFREE_APP_ID;
   const secretKey = settings?.payments?.cashfreeSecretKey || process.env.CASHFREE_SECRET_KEY;
@@ -67,7 +82,7 @@ export async function createCashfreeOrder(
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.message || `Cashfree error: ${response.statusText}`);
+    throw new Error(formatCashfreeErrorMessage(data.message, response.statusText));
   }
 
   return {
@@ -92,7 +107,7 @@ export async function getCashfreeOrder(orderId: string, settings?: StoreSettings
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.message || `Cashfree error: ${response.statusText}`);
+    throw new Error(formatCashfreeErrorMessage(data.message, response.statusText));
   }
 
   return data;
@@ -115,7 +130,7 @@ export async function getCashfreeOrderPayments(orderId: string, settings?: Store
     if (response.status === 404) {
       return [];
     }
-    throw new Error(data.message || `Cashfree error: ${response.statusText}`);
+    throw new Error(formatCashfreeErrorMessage(data.message, response.statusText));
   }
 
   return data;
@@ -149,7 +164,7 @@ export async function createCashfreeRefund(
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.message || `Cashfree refund error: ${response.statusText}`);
+    throw new Error(formatCashfreeErrorMessage(data.message, `Cashfree refund error: ${response.statusText}`));
   }
 
   return data;

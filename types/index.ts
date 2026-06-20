@@ -35,7 +35,7 @@ export type OrderStatus = "pending" | "confirmed" | "packed" | "shipped" | "deli
 
 export type DesignApprovalStatus = "pending" | "approved" | "rejected" | "flagged";
 
-export type PaymentProvider = "cashfree" | "upi_offline" | "razorpay" | "stripe";
+export type PaymentProvider = "cashfree" | "upi_offline" | "cod" | "razorpay" | "stripe";
 
 export type PaymentStatus = "initiated" | "success" | "failed" | "refunded";
 

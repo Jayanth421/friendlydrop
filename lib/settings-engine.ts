@@ -370,7 +370,15 @@ export function calculateDeliveryQuote(settings: StoreSettings, input: DeliveryQ
 
 function gatewayEnabled(settings: StoreSettings, gateway: PaymentProvider) {
   if (gateway === "cashfree") {
-    return settings.payments.methods.cashfree ?? false;
+    return Boolean(
+      (settings.payments.methods.cashfree ?? false) &&
+        (settings.payments.cashfreeAppId || process.env.CASHFREE_APP_ID) &&
+        (settings.payments.cashfreeSecretKey || process.env.CASHFREE_SECRET_KEY),
+    );
+  }
+
+  if (gateway === "cod") {
+    return settings.payments.methods.cod;
   }
 
   if (gateway === "razorpay") {
@@ -427,11 +435,16 @@ export function evaluateCheckoutControls(
 
   const inOrderRange =
     normalizedSubtotal >= settings.payments.rules.minOrderValue && normalizedSubtotal <= settings.payments.rules.maxOrderValue;
+  const normalizedPostalCode = input.postalCode?.trim() ?? "";
+  const codAllowed =
+    normalizedSubtotal <= settings.payments.rules.codMaxOrderValue &&
+    (!normalizedPostalCode || !settings.payments.rules.codBlockedPincodes.includes(normalizedPostalCode));
 
   const paymentEnabled = settings.payments.systemEnabled && settings.operations.checkoutEnabled && !settings.operations.maintenanceMode;
   const availableGateways: Record<PaymentProvider, boolean> = {
     cashfree: paymentEnabled && gatewayEnabled(settings, "cashfree") && inOrderRange,
     upi_offline: paymentEnabled && gatewayEnabled(settings, "upi_offline") && inOrderRange,
+    cod: paymentEnabled && gatewayEnabled(settings, "cod") && inOrderRange && codAllowed,
     razorpay: false,
     stripe: false,
   };
@@ -443,8 +456,10 @@ export function evaluateCheckoutControls(
     paymentMessage = "Payments are temporarily disabled by admin.";
   } else if (!inOrderRange) {
     paymentMessage = `Orders must be between ${settings.payments.rules.minOrderValue} and ${settings.payments.rules.maxOrderValue}.`;
-  } else if (!availableGateways.cashfree && !availableGateways.upi_offline) {
-    paymentMessage = "No payment gateway is currently available.";
+  } else if (!availableGateways.cashfree && !availableGateways.upi_offline && !availableGateways.cod) {
+    paymentMessage = (settings.payments.methods.cashfree ?? false) && !gatewayEnabled(settings, "cashfree")
+      ? "Cashfree credentials are missing. Configure App ID and Secret Key in Admin Payment Settings."
+      : "No payment gateway is currently available.";
   }
 
   return {

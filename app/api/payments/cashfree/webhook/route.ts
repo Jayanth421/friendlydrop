@@ -77,14 +77,6 @@ export async function POST(request: NextRequest) {
       const paymentGroup = data.payment.payment_group || "online";
       const paymentTime = data.payment.payment_time || new Date().toISOString();
 
-      // Check if order already finalized
-      const existing = await getOrder(orderId);
-      if (existing) {
-        console.log(`Order ${orderId} is already finalized. Webhook skipped creation.`);
-        return NextResponse.json({ status: "success", alreadyProcessed: true });
-      }
-
-      // Retrieve pending order draft
       const pendingRef = getAdminDb().collection("pendingOrders").doc(orderId);
       const pendingSnapshot = await pendingRef.get();
 
@@ -114,9 +106,13 @@ export async function POST(request: NextRequest) {
         finalizedOrderId?: string;
       };
 
-      // Idempotency check: if the pending draft is already finalized, skip creation
       if (pending.finalizedOrderId) {
-        console.log(`Order ${orderId} has already been finalized. Webhook skipped creation.`);
+        const finalizedOrder = await getOrder(pending.finalizedOrderId);
+        console.log(
+          finalizedOrder
+            ? `Cashfree pending order ${orderId} already finalized as ${finalizedOrder.id}. Webhook skipped creation.`
+            : `Cashfree pending order ${orderId} has finalizedOrderId ${pending.finalizedOrderId}, but the order was not found.`,
+        );
         return NextResponse.json({ status: "success", alreadyProcessed: true });
       }
 
