@@ -49,7 +49,7 @@ function CashfreeReturnContent() {
           
           // Redirect after 2 seconds
           setTimeout(() => {
-            router.replace(`/orders/${data.order.id}`);
+            router.replace(`/orders/${data.order.id}?success=true`);
           }, 2500);
         } else {
           const nextStatus = String(data.status ?? "").toUpperCase();
@@ -105,7 +105,7 @@ function CashfreeReturnContent() {
             </p>
             <Button 
               className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white" 
-              onClick={() => router.push(`/orders/${orderDetails?.id}`)}
+              onClick={() => router.push(`/orders/${orderDetails?.id}?success=true`)}
             >
               Go to Order Details
             </Button>

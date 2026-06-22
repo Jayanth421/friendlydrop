@@ -25,7 +25,7 @@ function StripeSuccessContent() {
         if (data.order?.id) {
           clearCart();
           toast.success("Stripe payment confirmed");
-          router.replace(`/orders/${data.order.id}`);
+          router.replace(`/orders/${data.order.id}?success=true`);
         }
       })
       .finally(() => setLoading(false));

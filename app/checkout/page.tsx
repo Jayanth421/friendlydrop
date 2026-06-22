@@ -438,7 +438,7 @@ export default function CheckoutPage() {
 
         clearCart();
         toast.success("UPI proof submitted. Order pending verification.");
-        router.push(`/orders/${data.order.id}`);
+        router.push(`/orders/${data.order.id}?success=true`);
       } else {
         const response = await fetch("/api/payments/cod", {
           method: "POST",
@@ -457,7 +457,7 @@ export default function CheckoutPage() {
 
         clearCart();
         toast.success("COD order placed. Pay on delivery.");
-        router.push(`/orders/${data.order.id}`);
+        router.push(`/orders/${data.order.id}?success=true`);
       }
     } catch (error) {
       console.error(error);

@@ -4,13 +4,26 @@ import { getOrder } from "@/lib/firebase/firestore";
 import { isAdminRole } from "@/lib/rbac";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { OrderTracker } from "@/components/shared/order-tracker";
+import { OrderSuccessTicket } from "@/components/shared/order-success-ticket";
 
-export default async function OrderDetailPage({ params }: { params: { orderId: string } }) {
+export default async function OrderDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { orderId: string };
+  searchParams?: { success?: string };
+}) {
   const user = await requireUser();
   const order = await getOrder(params.orderId);
 
   if (!order || (order.userId !== user.uid && !isAdminRole(user.role))) {
     notFound();
+  }
+
+  const isSuccess = searchParams?.success === "true";
+
+  if (isSuccess) {
+    return <OrderSuccessTicket order={order} />;
   }
 
   const subtotalAmount = order.subtotalAmount ?? order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
