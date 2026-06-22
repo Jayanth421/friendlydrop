@@ -3,6 +3,7 @@ import { requireApiUser } from "@/lib/auth/api";
 import { getStoreSettings, getOrder } from "@/lib/firebase/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { createCashfreeOrder } from "@/lib/payments/cashfree";
+import { getCashfreeReturnBaseUrl } from "@/lib/app-url";
 
 export const runtime = "nodejs";
 
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Order reference not found." }, { status: 404 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appUrl = getCashfreeReturnBaseUrl(request);
     
     // Recreate/Generate Cashfree payment session
     const cashfreeOrder = await createCashfreeOrder(

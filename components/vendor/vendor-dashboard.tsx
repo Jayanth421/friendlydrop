@@ -25,6 +25,7 @@ import {
   FileText,
   ImagePlus,
   LineChart,
+  Loader2,
   Menu,
   MessageSquare,
   Moon,
@@ -34,6 +35,7 @@ import {
   Settings,
   ShieldCheck,
   ShoppingBag,
+  Save,
   Star,
   Store,
   Sun,
@@ -53,11 +55,20 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 type DashboardProduct = {
   id: string;
   name: string;
+  description?: string;
+  price?: number;
+  category?: string;
+  sku?: string;
   image?: string;
+  primaryImage?: string;
+  images?: string[];
   stock: number;
   status?: string;
   rating?: number;
   reviewCount?: number;
+  discountPercent?: number;
+  lowStockThreshold?: number;
+  visibility?: "public" | "private";
 };
 
 type DashboardOrder = {
@@ -66,6 +77,8 @@ type DashboardOrder = {
   totalAmount: number;
   createdAt: string;
   shipping?: { courier?: string; trackingId?: string; eta?: string };
+  items?: Array<{ productId: string; name: string; quantity: number; price: number; image?: string }>;
+  address?: { fullName?: string; city?: string; state?: string; postalCode?: string };
 };
 
 type DashboardCustomer = {
@@ -84,6 +97,29 @@ type DashboardPayout = {
   status: "pending" | "completed" | "failed";
   periodLabel: string;
   createdAt: string;
+};
+
+type VendorMediaFile = {
+  id: string;
+  imageUrl: string;
+  path?: string;
+  folder?: string;
+  contentType?: string;
+  sizeBytes?: number;
+  createdAt?: string;
+};
+
+type ProductFormState = {
+  id?: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  stock: number;
+  sku: string;
+  imageUrl: string;
+  status: "draft" | "published" | "archived";
+  visibility: "public" | "private";
 };
 
 export type VendorDashboardSnapshot = {
@@ -220,10 +256,254 @@ function MiniAction({ icon: Icon, label, href }: { icon: typeof Store; label: st
   );
 }
 
+const emptyProductForm: ProductFormState = {
+  name: "",
+  description: "",
+  price: 499,
+  category: "photo-prints",
+  stock: 10,
+  sku: "",
+  imageUrl: "",
+  status: "published",
+  visibility: "public",
+};
+
+function productToForm(product: DashboardProduct): ProductFormState {
+  return {
+    id: product.id,
+    name: product.name,
+    description: product.description ?? "",
+    price: Number(product.price ?? 499),
+    category: product.category ?? "photo-prints",
+    stock: Number(product.stock ?? 0),
+    sku: product.sku ?? "",
+    imageUrl: product.primaryImage ?? product.image ?? product.images?.[0] ?? "",
+    status: (product.status as ProductFormState["status"]) ?? "published",
+    visibility: product.visibility ?? "public",
+  };
+}
+
+function readErrorMessage(data: unknown, fallback: string) {
+  if (data && typeof data === "object" && "error" in data) {
+    return String((data as { error?: unknown }).error ?? fallback);
+  }
+  return fallback;
+}
+
 export function VendorDashboard({ snapshot }: VendorDashboardProps) {
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [dark, setDark] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [products, setProducts] = useState<DashboardProduct[]>(snapshot.products);
+  const [orders, setOrders] = useState<DashboardOrder[]>(snapshot.recentOrders);
+  const [mediaFiles, setMediaFiles] = useState<VendorMediaFile[]>([]);
+  const [productForm, setProductForm] = useState<ProductFormState>(emptyProductForm);
+  const [orderDrafts, setOrderDrafts] = useState<Record<string, { status: string; courier: string; trackingId: string; eta: string }>>({});
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const showNotice = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(null), 3500);
+  };
+
+  const refreshVendorData = async () => {
+    const [productsResponse, ordersResponse, mediaResponse] = await Promise.all([
+      fetch("/api/vendor/products", { cache: "no-store" }),
+      fetch("/api/vendor/orders", { cache: "no-store" }),
+      fetch("/api/vendor/media", { cache: "no-store" }),
+    ]);
+
+    const [productsData, ordersData, mediaData] = await Promise.all([
+      productsResponse.json(),
+      ordersResponse.json(),
+      mediaResponse.json(),
+    ]);
+
+    if (productsResponse.ok) {
+      setProducts((productsData.products ?? []).map((product: DashboardProduct) => ({
+        ...product,
+        image: product.primaryImage ?? product.image ?? product.images?.[0],
+      })));
+    }
+
+    if (ordersResponse.ok) {
+      setOrders(ordersData.orders ?? []);
+    }
+
+    if (mediaResponse.ok) {
+      setMediaFiles(mediaData.files ?? []);
+    }
+  };
+
+  useEffect(() => {
+    refreshVendorData().catch((error) => {
+      console.error(error);
+      showNotice("Could not refresh vendor data");
+    });
+  }, []);
+
+  const uploadProductImage = async (file: File, assignToProduct = true) => {
+    setBusyAction("upload-product-image");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "products");
+      formData.append("record", "true");
+
+      const response = await fetch("/api/uploads", {
+        method: "POST",
+        headers: {
+          "Idempotency-Key": `vendor-product:${file.name}:${file.size}:${file.lastModified}`,
+        },
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(readErrorMessage(data, "Upload failed"));
+      }
+
+      const imageUrl = data.path ?? data.imageUrl ?? data.mediaUrl;
+      if (assignToProduct) {
+        setProductForm((prev) => ({ ...prev, imageUrl }));
+      }
+      showNotice("Media uploaded");
+      await refreshVendorData();
+    } catch (error) {
+      console.error(error);
+      showNotice(error instanceof Error ? error.message : "Image upload failed");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const saveProduct = async () => {
+    if (!productForm.name.trim() || !productForm.description.trim() || !productForm.imageUrl.trim()) {
+      showNotice("Product name, description, and image are required");
+      return;
+    }
+
+    setBusyAction("save-product");
+    try {
+      const payload = {
+        name: productForm.name.trim(),
+        description: productForm.description.trim(),
+        price: Number(productForm.price),
+        category: productForm.category.trim() || "photo-prints",
+        stock: Number(productForm.stock),
+        sku: productForm.sku.trim() || undefined,
+        primaryImage: productForm.imageUrl.trim(),
+        images: [productForm.imageUrl.trim()],
+        status: productForm.status,
+        visibility: productForm.visibility,
+      };
+      const response = await fetch(productForm.id ? `/api/vendor/products/${productForm.id}` : "/api/vendor/products", {
+        method: productForm.id ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(readErrorMessage(data, "Could not save product"));
+      }
+
+      setProductForm(emptyProductForm);
+      showNotice(productForm.id ? "Product updated" : "Product created");
+      await refreshVendorData();
+    } catch (error) {
+      console.error(error);
+      showNotice(error instanceof Error ? error.message : "Could not save product");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const deleteVendorProduct = async (productId: string) => {
+    if (!confirm("Delete this product?")) {
+      return;
+    }
+
+    setBusyAction(`delete-product-${productId}`);
+    try {
+      const response = await fetch(`/api/vendor/products/${productId}`, { method: "DELETE" });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(readErrorMessage(data, "Could not delete product"));
+      }
+
+      showNotice("Product deleted");
+      await refreshVendorData();
+    } catch (error) {
+      console.error(error);
+      showNotice(error instanceof Error ? error.message : "Could not delete product");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const draftForOrder = (order: DashboardOrder) => {
+    return orderDrafts[order.id] ?? {
+      status: order.status,
+      courier: order.shipping?.courier ?? "",
+      trackingId: order.shipping?.trackingId ?? "",
+      eta: order.shipping?.eta ?? "",
+    };
+  };
+
+  const updateOrderDraft = (order: DashboardOrder, updates: Partial<{ status: string; courier: string; trackingId: string; eta: string }>) => {
+    setOrderDrafts((prev) => ({
+      ...prev,
+      [order.id]: {
+        ...draftForOrder(order),
+        ...updates,
+      },
+    }));
+  };
+
+  const saveOrderTracking = async (order: DashboardOrder) => {
+    const draft = draftForOrder(order);
+    setBusyAction(`order-${order.id}`);
+    try {
+      const statusResponse = await fetch(`/api/vendor/orders/${order.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: draft.status, note: "Updated by vendor dashboard" }),
+      });
+      const statusData = await statusResponse.json();
+
+      if (!statusResponse.ok) {
+        throw new Error(readErrorMessage(statusData, "Could not update status"));
+      }
+
+      if (draft.courier.trim() && draft.trackingId.trim()) {
+        const shippingResponse = await fetch(`/api/vendor/orders/${order.id}/shipping`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            courier: draft.courier.trim(),
+            trackingId: draft.trackingId.trim(),
+            eta: draft.eta.trim() || undefined,
+          }),
+        });
+        const shippingData = await shippingResponse.json();
+
+        if (!shippingResponse.ok) {
+          throw new Error(readErrorMessage(shippingData, "Could not update tracking"));
+        }
+      }
+
+      showNotice("Order updated");
+      await refreshVendorData();
+    } catch (error) {
+      console.error(error);
+      showNotice(error instanceof Error ? error.message : "Could not update order");
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   const notifications = useMemo(
     () => [
@@ -322,6 +602,12 @@ export function VendorDashboard({ snapshot }: VendorDashboardProps) {
           </header>
 
           <main className="space-y-5 p-4 lg:p-6">
+            {notice ? (
+              <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100">
+                {notice}
+              </div>
+            ) : null}
+
             <div className="rounded-lg border border-white/70 bg-gradient-to-r from-slate-950 via-sky-900 to-indigo-900 p-5 text-white shadow-sm">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -427,7 +713,7 @@ export function VendorDashboard({ snapshot }: VendorDashboardProps) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {snapshot.recentOrders.map((order) => (
+                        {orders.slice(0, 8).map((order) => (
                           <tr key={order.id}>
                             <td className="py-3 font-semibold">#{order.id}</td>
                             <td><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(order.status)}`}>{order.status}</span></td>
@@ -436,6 +722,11 @@ export function VendorDashboard({ snapshot }: VendorDashboardProps) {
                             <td className="text-right font-semibold">{formatCurrency(order.totalAmount)}</td>
                           </tr>
                         ))}
+                        {!orders.length ? (
+                          <tr>
+                            <td colSpan={5} className="py-6 text-center text-slate-500">No vendor orders yet.</td>
+                          </tr>
+                        ) : null}
                       </tbody>
                     </table>
                   </div>
@@ -456,32 +747,106 @@ export function VendorDashboard({ snapshot }: VendorDashboardProps) {
 
             {activeSection === "products" ? (
               <div className="space-y-5">
-                <Panel title="Product Management" action={<div className="flex flex-wrap gap-2"><MiniAction icon={Plus} label="Add Product" /><MiniAction icon={Upload} label="Bulk Product Upload" /></div>}>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <MiniAction icon={Edit} label="Edit Product" />
-                    <MiniAction icon={Trash2} label="Delete Product" />
-                    <MiniAction icon={ImagePlus} label="Product Image Gallery" />
-                    <MiniAction icon={Video} label="Product Videos" />
-                    <MiniAction icon={Boxes} label="Inventory Management" />
-                    <MiniAction icon={Tag} label="Categories" />
-                    <MiniAction icon={Settings} label="Product Variations" />
-                    <MiniAction icon={Search} label="Product SEO Settings" />
+                <Panel
+                  title={productForm.id ? "Edit Product" : "Add Product"}
+                  action={
+                    productForm.id ? (
+                      <Button type="button" variant="outline" className="h-9" onClick={() => setProductForm(emptyProductForm)}>
+                        <Plus className="h-4 w-4" />
+                        New Product
+                      </Button>
+                    ) : null
+                  }
+                >
+                  <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="space-y-1 text-sm font-medium">
+                        <span>Product name</span>
+                        <input className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" value={productForm.name} onChange={(event) => setProductForm((prev) => ({ ...prev, name: event.target.value }))} />
+                      </label>
+                      <label className="space-y-1 text-sm font-medium">
+                        <span>Category</span>
+                        <input className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" value={productForm.category} onChange={(event) => setProductForm((prev) => ({ ...prev, category: event.target.value }))} />
+                      </label>
+                      <label className="space-y-1 text-sm font-medium">
+                        <span>Price</span>
+                        <input type="number" min="1" className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" value={productForm.price} onChange={(event) => setProductForm((prev) => ({ ...prev, price: Number(event.target.value) }))} />
+                      </label>
+                      <label className="space-y-1 text-sm font-medium">
+                        <span>Stock</span>
+                        <input type="number" min="0" className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" value={productForm.stock} onChange={(event) => setProductForm((prev) => ({ ...prev, stock: Number(event.target.value) }))} />
+                      </label>
+                      <label className="space-y-1 text-sm font-medium">
+                        <span>SKU</span>
+                        <input className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" value={productForm.sku} onChange={(event) => setProductForm((prev) => ({ ...prev, sku: event.target.value }))} />
+                      </label>
+                      <label className="space-y-1 text-sm font-medium">
+                        <span>Status</span>
+                        <select className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" value={productForm.status} onChange={(event) => setProductForm((prev) => ({ ...prev, status: event.target.value as ProductFormState["status"] }))}>
+                          <option value="published">Published</option>
+                          <option value="draft">Draft</option>
+                          <option value="archived">Archived</option>
+                        </select>
+                      </label>
+                      <label className="space-y-1 text-sm font-medium sm:col-span-2">
+                        <span>Description</span>
+                        <textarea className="min-h-24 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" value={productForm.description} onChange={(event) => setProductForm((prev) => ({ ...prev, description: event.target.value }))} />
+                      </label>
+                    </div>
+                    <div className="space-y-3">
+                      <label className="space-y-1 text-sm font-medium">
+                        <span>Product image URL</span>
+                        <input className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" value={productForm.imageUrl} onChange={(event) => setProductForm((prev) => ({ ...prev, imageUrl: event.target.value }))} />
+                      </label>
+                      <div className="rounded-lg border border-dashed border-slate-300 p-4 dark:border-slate-700">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) uploadProductImage(file);
+                          }}
+                          className="text-sm"
+                        />
+                        {busyAction === "upload-product-image" ? <p className="mt-2 flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Uploading image...</p> : null}
+                      </div>
+                      {productForm.imageUrl ? (
+                        <div className="aspect-[4/3] overflow-hidden rounded-lg bg-slate-100">
+                          <img src={productForm.imageUrl} alt="" className="h-full w-full object-cover" />
+                        </div>
+                      ) : null}
+                      <Button type="button" className="h-10 w-full" onClick={saveProduct} disabled={busyAction === "save-product"}>
+                        {busyAction === "save-product" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        {productForm.id ? "Update Product" : "Publish Product"}
+                      </Button>
+                    </div>
                   </div>
                 </Panel>
-                <Panel title="Product Performance">
+                <Panel title="Your Products">
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    {snapshot.productPerformance.map((product) => (
+                    {products.map((product) => (
                       <article key={product.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
                         <div className="aspect-[4/3] overflow-hidden rounded-lg bg-slate-200">
                           {product.image ? <img src={product.image} alt={product.name} className="h-full w-full object-cover" /> : null}
                         </div>
                         <h3 className="mt-3 line-clamp-2 text-sm font-semibold">{product.name}</h3>
                         <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                          <span>{formatCurrency(product.revenue)}</span>
+                          <span>{formatCurrency(product.price ?? 0)}</span>
                           <span>{product.stock} stock</span>
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                          <Button type="button" variant="outline" className="h-8 flex-1 text-xs" onClick={() => setProductForm(productToForm(product))}>
+                            <Edit className="h-3.5 w-3.5" />
+                            Edit
+                          </Button>
+                          <Button type="button" variant="outline" className="h-8 flex-1 text-xs text-rose-600" onClick={() => deleteVendorProduct(product.id)} disabled={busyAction === `delete-product-${product.id}`}>
+                            {busyAction === `delete-product-${product.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                            Delete
+                          </Button>
                         </div>
                       </article>
                     ))}
+                    {!products.length ? <div className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-500 dark:border-slate-700">No products yet. Add your first product above.</div> : null}
                   </div>
                 </Panel>
               </div>
@@ -489,19 +854,79 @@ export function VendorDashboard({ snapshot }: VendorDashboardProps) {
 
             {activeSection === "orders" ? (
               <Panel title="Order Management">
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="mb-5 grid gap-3 md:grid-cols-3">
                   {orderRows.map((row) => (
                     <div key={row.label} className="rounded-lg border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
                       <p className="text-sm text-slate-500">{row.label} Orders</p>
                       <p className="mt-2 text-2xl font-semibold">{row.value}</p>
                     </div>
                   ))}
-                  <MiniAction icon={Download} label="Download Invoice" />
-                  <MiniAction icon={Truck} label="Order Tracking" />
-                  <MiniAction icon={Edit} label="Update Order Status" />
-                  <MiniAction icon={FileText} label="Order Details" />
-                  <MiniAction icon={Trash2} label="Refund Requests" />
-                  <MiniAction icon={ClipboardList} label="Order History" />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[980px] text-left text-sm">
+                    <thead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                      <tr>
+                        <th className="py-2">Order</th>
+                        <th>Customer</th>
+                        <th>Items</th>
+                        <th>Status</th>
+                        <th>Courier</th>
+                        <th>Tracking</th>
+                        <th>ETA</th>
+                        <th className="text-right">Total</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {orders.map((order) => {
+                        const draft = draftForOrder(order);
+                        return (
+                          <tr key={order.id}>
+                            <td className="py-3 font-semibold">#{order.id}</td>
+                            <td>
+                              <div className="font-medium">{order.address?.fullName ?? "Customer"}</div>
+                              <div className="text-xs text-slate-500">{[order.address?.city, order.address?.state].filter(Boolean).join(", ")}</div>
+                            </td>
+                            <td className="max-w-52">
+                              <div className="truncate">{order.items?.map((item) => `${item.name} x${item.quantity}`).join(", ") ?? "Order items"}</div>
+                              <div className="text-xs text-slate-500">{formatDate(order.createdAt)}</div>
+                            </td>
+                            <td>
+                              <select className="h-9 rounded-lg border border-slate-200 px-2 text-sm dark:border-slate-700 dark:bg-slate-950" value={draft.status} onChange={(event) => updateOrderDraft(order, { status: event.target.value })}>
+                                <option value="confirmed">Confirmed</option>
+                                <option value="packed">Packed</option>
+                                <option value="shipped">Shipped</option>
+                                <option value="delivered">Delivered</option>
+                                <option value="returned">Returned</option>
+                                <option value="cancelled">Cancelled</option>
+                              </select>
+                            </td>
+                            <td>
+                              <input className="h-9 w-32 rounded-lg border border-slate-200 px-2 text-sm dark:border-slate-700 dark:bg-slate-950" value={draft.courier} onChange={(event) => updateOrderDraft(order, { courier: event.target.value })} placeholder="Courier" />
+                            </td>
+                            <td>
+                              <input className="h-9 w-36 rounded-lg border border-slate-200 px-2 text-sm dark:border-slate-700 dark:bg-slate-950" value={draft.trackingId} onChange={(event) => updateOrderDraft(order, { trackingId: event.target.value })} placeholder="Tracking ID" />
+                            </td>
+                            <td>
+                              <input className="h-9 w-32 rounded-lg border border-slate-200 px-2 text-sm dark:border-slate-700 dark:bg-slate-950" value={draft.eta} onChange={(event) => updateOrderDraft(order, { eta: event.target.value })} placeholder="ETA" />
+                            </td>
+                            <td className="text-right font-semibold">{formatCurrency(order.totalAmount)}</td>
+                            <td className="text-right">
+                              <Button type="button" className="h-9" onClick={() => saveOrderTracking(order)} disabled={busyAction === `order-${order.id}`}>
+                                {busyAction === `order-${order.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                                Save
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!orders.length ? (
+                        <tr>
+                          <td colSpan={9} className="py-8 text-center text-slate-500">No orders found for your products yet.</td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
                 </div>
               </Panel>
             ) : null}
@@ -531,16 +956,54 @@ export function VendorDashboard({ snapshot }: VendorDashboardProps) {
 
             {activeSection === "media" ? (
               <Panel title="Media Library" action={<Badge variant="outline">QOENS storage</Badge>}>
-                <div className="grid gap-3 md:grid-cols-4">
-                  <MiniAction icon={ImagePlus} label="Upload Images" />
-                  <MiniAction icon={Video} label="Upload Videos" />
-                  <MiniAction icon={FileText} label="Upload PDFs" />
-                  <MiniAction icon={ImagePlus} label="Upload Banners" />
-                  <MiniAction icon={Store} label="Upload Logos" />
-                  <MiniAction icon={Search} label="Media Search" />
-                  <MiniAction icon={ChevronRight} label="Media Preview" />
-                  <MiniAction icon={Trash2} label="Media Delete" />
-                  <MiniAction icon={Download} label="Copy Media URL" />
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-dashed border-slate-300 p-4 dark:border-slate-700">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-semibold">Upload product images, banners, PDFs, or videos</p>
+                        <p className="text-sm text-slate-500">Uploaded files are saved to your vendor media library and can be used in products.</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*,video/*,application/pdf"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) uploadProductImage(file, false);
+                        }}
+                        className="text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {mediaFiles.map((file) => {
+                      const url = file.imageUrl ?? file.path;
+                      const isImage = (file.contentType ?? "").startsWith("image/");
+                      return (
+                        <article key={file.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+                          <div className="grid aspect-[4/3] place-items-center overflow-hidden rounded-lg bg-slate-200 text-slate-500">
+                            {isImage && url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <FileText className="h-8 w-8" />}
+                          </div>
+                          <p className="mt-3 truncate text-sm font-semibold">{file.folder ?? "media"}</p>
+                          <p className="text-xs text-slate-500">{file.createdAt ? formatDate(file.createdAt) : "Uploaded media"}</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="mt-3 h-8 w-full text-xs"
+                            onClick={() => {
+                              if (url) {
+                                navigator.clipboard.writeText(url);
+                                showNotice("Media URL copied");
+                              }
+                            }}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Copy URL
+                          </Button>
+                        </article>
+                      );
+                    })}
+                    {!mediaFiles.length ? <div className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-500 dark:border-slate-700">No media uploaded yet.</div> : null}
+                  </div>
                 </div>
               </Panel>
             ) : null}

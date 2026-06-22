@@ -13,6 +13,7 @@ import { canUseGateway, calculateDeliveryQuote, evaluateCheckoutControls } from 
 import { beginIdempotentRequest, completeIdempotentRequest, failIdempotentRequest } from "@/lib/security/idempotency";
 import { assertRateLimit, buildRateLimitKey } from "@/lib/security/rate-limit";
 import { assertTrustedMutationRequest, toGuardErrorResponse } from "@/lib/security/request-guards";
+import { getCashfreeReturnBaseUrl } from "@/lib/app-url";
 
 export const runtime = "nodejs";
 
@@ -225,7 +226,7 @@ export async function POST(request: NextRequest) {
 
     if (totals.selectedGateway === "cashfree") {
       const pendingOrderId = nanoid(14);
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const appUrl = getCashfreeReturnBaseUrl(request);
 
       await getAdminDb().collection("pendingOrders").doc(pendingOrderId).set({
         id: pendingOrderId,

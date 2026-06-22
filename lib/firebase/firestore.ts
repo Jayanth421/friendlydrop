@@ -1272,6 +1272,34 @@ export async function getUploadsForAdmin(): Promise<UploadRecord[]> {
   return snapshot.docs.map((doc) => mapDoc<UploadRecord>(doc));
 }
 
+export async function getUploadsForUser(userId: string): Promise<UploadRecord[]> {
+  if (!isFirestoreReady()) {
+    return [];
+  }
+
+  try {
+    const snapshot = await getAdminDb()
+      .collection("uploads")
+      .where("userId", "==", userId)
+      .orderBy("createdAt", "desc")
+      .limit(200)
+      .get();
+    return snapshot.docs.map((doc) => mapDoc<UploadRecord>(doc));
+  } catch (error) {
+    if (!isMissingIndexError(error)) {
+      throw error;
+    }
+
+    console.warn("Firestore composite index missing for vendor uploads query. Falling back to in-memory filtering.", error);
+    const snapshot = await getAdminDb().collection("uploads").limit(1000).get();
+    return snapshot.docs
+      .map((doc) => mapDoc<UploadRecord>(doc))
+      .filter((upload) => upload.userId === userId)
+      .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+      .slice(0, 200);
+  }
+}
+
 export async function updateUploadModeration(uploadId: string, updates: Partial<UploadRecord>) {
   ensureFirestoreReady();
   await getAdminDb().collection("uploads").doc(uploadId).set(updates, { merge: true });
