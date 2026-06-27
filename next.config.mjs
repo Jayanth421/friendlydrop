@@ -12,6 +12,7 @@ const nextConfig = {
       "api.qrserver.com",
       "i.pinimg.com",
       "dl.oqens.me",
+      "d2v5dzhdg4zhx3.cloudfront.net",
     ],
     remotePatterns: [
       {
@@ -37,6 +38,10 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "dl.oqens.me",
+      },
+      {
+        protocol: "https",
+        hostname: "d2v5dzhdg4zhx3.cloudfront.net",
       },
     ],
   },

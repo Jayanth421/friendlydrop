@@ -46,6 +46,7 @@ import {
   SeoTrafficInsight,
   SocialShareConfig,
   SocialShareLink,
+  VendorProfile,
 } from "@/types";
 
 function normalizeAddressKey(address: Address) {
@@ -115,12 +116,17 @@ function applyProductsPostFilters(
     minRating?: number;
     availability?: "in-stock" | "out-of-stock";
     minDiscount?: number;
-  },
+    vendorId?: string;
+  }
 ) {
   let filtered = products;
 
   if (filters?.category) {
     filtered = filtered.filter((product) => product.category === filters.category);
+  }
+
+  if (filters?.vendorId) {
+    filtered = filtered.filter((product) => product.vendorId === filters.vendorId);
   }
 
   if (filters?.status) {
@@ -670,6 +676,7 @@ export async function getProducts(filters?: {
   minRating?: number;
   availability?: "in-stock" | "out-of-stock";
   minDiscount?: number;
+  vendorId?: string;
 }): Promise<Product[]> {
   if (!isFirestoreReady()) {
     const sort = filters?.sort ?? "popularity";
@@ -682,6 +689,10 @@ export async function getProducts(filters?: {
 
   if (filters?.category) {
     query = query.where("category", "==", filters.category);
+  }
+
+  if (filters?.vendorId) {
+    query = query.where("vendorId", "==", filters.vendorId);
   }
 
   if (filters?.status) {
@@ -1002,6 +1013,24 @@ export async function createReview(data: Omit<Review, "id" | "createdAt">) {
 export async function moderateReview(reviewId: string, updates: Partial<Review>) {
   ensureFirestoreReady();
   await getAdminDb().collection("reviews").doc(reviewId).set(updates, { merge: true });
+}
+
+export async function getVendorProfile(vendorId: string): Promise<VendorProfile | null> {
+  if (!isFirestoreReady()) {
+    return null;
+  }
+
+  try {
+    const doc = await getAdminDb().collection("vendor_profiles").doc(vendorId).get();
+    if (!doc.exists) {
+      return null;
+    }
+
+    return mapDoc<VendorProfile>(doc);
+  } catch (error) {
+    console.error(`Error in getVendorProfile for vendor "${vendorId}":`, error);
+    return null;
+  }
 }
 
 export async function upsertUserProfile(profile: Omit<UserProfile, "createdAt"> & { createdAt?: string }) {
@@ -2084,6 +2113,11 @@ export async function upsertCmsPage(input: Omit<CmsPageConfig, "id" | "updatedAt
   return payload;
 }
 
+export async function deleteCmsPage(id: string) {
+  ensureFirestoreReady();
+  await getAdminDb().collection("cmsPages").doc(id).delete();
+}
+
 export async function getIntegrationLogs(limit = 100): Promise<IntegrationLogEntry[]> {
   if (!isFirestoreReady()) {
     return FALLBACK_INTEGRATION_LOGS.slice(0, limit);
@@ -2376,7 +2410,7 @@ export async function getCmsPageBySlug(slug: string): Promise<CmsPageConfig | nu
   }
 
   try {
-    const snapshot = await getAdminDb().collection("cms_pages").where("slug", "==", slug).limit(1).get();
+    const snapshot = await getAdminDb().collection("cmsPages").where("slug", "==", slug).limit(1).get();
 
     if (snapshot.empty) {
       return null;

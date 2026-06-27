@@ -338,6 +338,42 @@ export interface VendorProfile {
   orderCount?: number;
   kycVerified?: boolean;
   documents?: Array<{ name: string; url: string; type: "gst" | "pan" | "aadhaar" | "other" }>;
+  settings?: {
+    description?: string;
+    address?: string;
+    supportEmail?: string;
+    supportPhone?: string;
+    gstin?: string;
+    pan?: string;
+    social?: {
+      website?: string;
+      instagram?: string;
+      facebook?: string;
+      twitter?: string;
+    };
+  };
+  bankDetails?: {
+    accountName: string;
+    accountNumber: string;
+    ifsc: string;
+    bankName: string;
+  };
+  shippingSettings?: {
+    processingDays?: string;
+    cutoffTime?: string;
+    codEnabled?: boolean;
+    prepaidEnabled?: boolean;
+    expressEnabled?: boolean;
+    zones?: Array<{
+      id: string;
+      name: string;
+      regions: string;
+      freeAbove: number | null;
+      flatRate: number;
+      deliveryDays: string;
+      active: boolean;
+    }>;
+  };
   createdAt: string;
   updatedAt?: string;
 }
@@ -486,6 +522,7 @@ export interface InventoryAlert {
 export interface SupportTicket {
   id: string;
   userId: string;
+  vendorId?: string;
   subject: string;
   category: "refund" | "delay" | "damage" | "other";
   status: "open" | "in_progress" | "resolved";

@@ -31,8 +31,36 @@ function getLoginErrorMessage(error: unknown) {
   return "Login failed.";
 }
 
+/**
+ * Returns the full URL for the zone that owns a given role.
+ * Returns null for regular "user" role (stays on main app).
+ */
+const ADMIN_ROLES = new Set(["staff", "manager", "admin", "super_admin"]);
+
+function getZoneUrl(role: string): string | null {
+  if (typeof window === "undefined") return null;
+
+  const hostname = window.location.hostname; // e.g. "localhost" or "app.friendlydrop.in"
+  const isLocal = hostname === "localhost" || hostname.endsWith(".localhost");
+  const port = window.location.port ? `:${window.location.port}` : "";
+
+  if (role === "vendor") {
+    return isLocal
+      ? `http://vendor.localhost${port}`
+      : "https://vendor.friendlydrop.in";
+  }
+
+  if (ADMIN_ROLES.has(role)) {
+    return isLocal
+      ? `http://admin.localhost${port}`
+      : "https://admin.friendlydrop.in";
+  }
+
+  return null;
+}
+
 export function LoginAuthPanel({ storeName, brandPrefix, logoUrl, loginLeftImageUrl }: LoginAuthPanelProps) {
-  const { login, loading, user } = useAuth();
+  const { login, loading, user, role } = useAuth();
   const loginArtwork = resolveMediaUrl(loginLeftImageUrl, { width: 1200, quality: 70, format: "webp" });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,17 +84,28 @@ export function LoginAuthPanel({ storeName, brandPrefix, logoUrl, loginLeftImage
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace(redirect);
+      const zoneUrl = getZoneUrl(role);
+      if (zoneUrl) {
+        window.location.href = zoneUrl;
+      } else {
+        router.replace(redirect);
+      }
     }
-  }, [loading, redirect, router, user]);
+  }, [loading, redirect, role, router, user]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     try {
-      await login(email, password);
+      const resolvedRole = await login(email, password);
       toast.success("Welcome back");
-      router.replace(redirect);
+      const zoneUrl = getZoneUrl(resolvedRole);
+      if (zoneUrl) {
+        // Full navigation to a different subdomain
+        window.location.href = zoneUrl;
+      } else {
+        router.replace(redirect);
+      }
     } catch (error) {
       console.error(error);
       toast.error(getLoginErrorMessage(error));

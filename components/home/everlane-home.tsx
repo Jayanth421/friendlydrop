@@ -1,9 +1,12 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import { Leaf, MapPin, Package, ShoppingBag } from "lucide-react";
+import { Leaf, MapPin, Package, ShoppingBag, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { CmsPageConfig, Product } from "@/types";
+import { BannerItem, CmsPageConfig, Product } from "@/types";
 import { resolveMediaUrl } from "@/lib/media";
+import { useEffect, useRef, useState } from "react";
 
 const CATEGORY_ITEMS = [
   {
@@ -97,16 +100,114 @@ function firstN(products: Product[], total: number, fallback: string) {
   return resolved;
 }
 
+// ── Hero Banner Carousel ────────────────────────────────────────────────────
+
+function resolveBannerHref(banner: BannerItem): string {
+  if (banner.linkType === "external") return banner.linkTarget;
+  if (banner.linkType === "product") return `/products/${banner.linkTarget}`;
+  if (banner.linkType === "category") return banner.linkTarget.startsWith("/") ? banner.linkTarget : `/products?category=${banner.linkTarget}`;
+  return banner.linkTarget;
+}
+
+function HeroBannerCarousel({ banners }: { banners: BannerItem[] }) {
+  const [current, setCurrent] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const prev = () => setCurrent((c) => (c - 1 + banners.length) % banners.length);
+  const next = () => setCurrent((c) => (c + 1) % banners.length);
+
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    timerRef.current = setInterval(() => setCurrent((c) => (c + 1) % banners.length), 5000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [banners.length]);
+
+  const banner = banners[current];
+  const imgSrc = resolveMediaUrl(banner.imageDesktop) || banner.imageDesktop;
+
+  return (
+    <section className="relative overflow-hidden">
+      <div className="relative h-[480px] w-full md:h-[620px]">
+        {/* Slide images — render all, show current via opacity for smooth transition */}
+        {banners.map((b, i) => {
+          const src = resolveMediaUrl(b.imageDesktop) || b.imageDesktop;
+          return (
+            <div
+              key={b.id}
+              className={`absolute inset-0 transition-opacity duration-700 ${i === current ? "opacity-100" : "opacity-0"}`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt={b.title} className="h-full w-full object-cover" />
+            </div>
+          );
+        })}
+
+        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
+
+        {/* Text overlay */}
+        <div className="absolute inset-y-0 left-[8%] flex max-w-xl flex-col justify-center text-white">
+          <h1 className="font-sans text-4xl font-medium tracking-[0.02em] md:text-[64px] md:leading-[1.02]">
+            {banner.title}
+          </h1>
+          <Link
+            href={resolveBannerHref(banner)}
+            className="mt-8 inline-flex w-fit items-center justify-center rounded-[10px] bg-white px-14 py-3 text-sm uppercase tracking-[0.12em] text-[#262626] transition hover:bg-[#efefef]"
+          >
+            Shop Now
+          </Link>
+        </div>
+
+        {/* Prev / Next arrows (only if more than one banner) */}
+        {banners.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={prev}
+              aria-label="Previous banner"
+              className="absolute left-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition hover:bg-black/50"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={next}
+              aria-label="Next banner"
+              className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition hover:bg-black/50"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+
+            {/* Dot indicators */}
+            <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
+              {banners.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setCurrent(i)}
+                  aria-label={`Go to slide ${i + 1}`}
+                  className={`h-2 rounded-full transition-all duration-300 ${i === current ? "w-6 bg-white" : "w-2 bg-white/50"}`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function EverlaneHome({
   featuredProducts,
   latestProducts,
   allProducts,
   cmsPage,
+  heroBanners = [],
 }: {
   featuredProducts: Product[];
   latestProducts: Product[];
   allProducts: Product[];
   cmsPage?: CmsPageConfig | null;
+  heroBanners?: BannerItem[];
 }) {
   const heroImage = safeImage(cmsPage?.heroImageUrl || featuredProducts[0]?.images[0], FALLBACK_HERO);
   const categoryFallbacks = firstN(featuredProducts, 6, FALLBACK_HERO);
@@ -116,26 +217,30 @@ export function EverlaneHome({
 
   return (
     <main className="figma-home pb-20">
-      <section className="relative overflow-hidden">
-        <div className="relative h-[480px] w-full md:h-[620px]">
-          <Image src={heroImage} alt="Seasonal collection" fill className="object-cover" sizes="100vw" priority />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
-          <div className="absolute inset-y-0 left-[8%] flex max-w-xl flex-col justify-center text-white">
-            <h1 className="font-sans text-4xl font-medium tracking-[0.02em] md:text-[64px] md:leading-[1.02]">
-              {cmsPage?.title || "Your Cozy Era"}
-            </h1>
-            <p className="mt-4 text-xl font-light md:text-[34px] md:leading-[1.35]">
-              {cmsPage?.excerpt || "Get peak comfy-chic with new winter essentials."}
-            </p>
-            <Link
-              href="/products"
-              className="mt-8 inline-flex w-fit items-center justify-center rounded-[10px] bg-white px-14 py-3 text-sm uppercase tracking-[0.12em] text-[#262626] transition hover:bg-[#efefef]"
-            >
-              Shop Now
-            </Link>
+      {heroBanners.length > 0 ? (
+        <HeroBannerCarousel banners={heroBanners} />
+      ) : (
+        <section className="relative overflow-hidden">
+          <div className="relative h-[480px] w-full md:h-[620px]">
+            <Image src={heroImage} alt="Seasonal collection" fill className="object-cover" sizes="100vw" priority />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/20 to-transparent" />
+            <div className="absolute inset-y-0 left-[8%] flex max-w-xl flex-col justify-center text-white">
+              <h1 className="font-sans text-4xl font-medium tracking-[0.02em] md:text-[64px] md:leading-[1.02]">
+                {cmsPage?.title || "Your Cozy Era"}
+              </h1>
+              <p className="mt-4 text-xl font-light md:text-[34px] md:leading-[1.35]">
+                {cmsPage?.excerpt || "Get peak comfy-chic with new winter essentials."}
+              </p>
+              <Link
+                href="/products"
+                className="mt-8 inline-flex w-fit items-center justify-center rounded-[10px] bg-white px-14 py-3 text-sm uppercase tracking-[0.12em] text-[#262626] transition hover:bg-[#efefef]"
+              >
+                Shop Now
+              </Link>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="mx-auto max-w-[1400px] px-4 py-12 md:px-10 md:py-16">
         <h2 className="text-center text-xl text-[#262626] md:text-[28px]">Shop by Category</h2>

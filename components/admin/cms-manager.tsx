@@ -79,6 +79,8 @@ export function CmsManager({ initialPages }: { initialPages: CmsPageConfig[] }) 
   const [editorMode, setEditorMode] = useState<"rich" | "html" | "source">("rich");
   const [saving, setSaving] = useState(false);
   const [uploadingHero, setUploadingHero] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<CmsPageConfig | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const sortedPages = useMemo(
     () => [...pages].sort((a, b) => a.slug.localeCompare(b.slug)),
@@ -125,6 +127,27 @@ export function CmsManager({ initialPages }: { initialPages: CmsPageConfig[] }) 
     });
     setForm(mapPageToForm(result.page));
     toast.success("CMS page saved");
+  };
+
+  const deletePage = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+
+    const response = await fetch(`/api/admin/cms?id=${encodeURIComponent(confirmDelete.id)}`, {
+      method: "DELETE",
+    });
+    setDeleting(false);
+
+    const result = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!response.ok) {
+      toast.error(result.error ?? "Could not delete CMS page");
+      return;
+    }
+
+    setPages((prev) => prev.filter((p) => p.id !== confirmDelete.id));
+    if (form.id === confirmDelete.id) setForm(defaultForm());
+    setConfirmDelete(null);
+    toast.success("CMS page deleted");
   };
 
   const uploadHeroImage = async (file: File) => {
@@ -315,6 +338,7 @@ export function CmsManager({ initialPages }: { initialPages: CmsPageConfig[] }) 
                 <TableHead>Status</TableHead>
                 <TableHead>Updated</TableHead>
                 <TableHead>Link</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -332,6 +356,16 @@ export function CmsManager({ initialPages }: { initialPages: CmsPageConfig[] }) 
                         {href}
                       </a>
                     </TableCell>
+                    <TableCell>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setConfirmDelete(page); }}
+                        className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700"
+                        aria-label={`Delete ${page.title}`}
+                      >
+                        Delete
+                      </button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -339,6 +373,48 @@ export function CmsManager({ initialPages }: { initialPages: CmsPageConfig[] }) 
           </Table>
         </CardContent>
       </Card>
+
+      {/* ── Delete confirmation modal ─────────────────────────────────── */}
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => !deleting && setConfirmDelete(null)}
+          aria-modal="true"
+          role="dialog"
+          aria-labelledby="delete-dialog-title"
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="delete-dialog-title" className="mb-1 text-base font-semibold text-slate-900">
+              Delete page?
+            </h2>
+            <p className="mb-5 text-sm text-slate-500">
+              <span className="font-medium text-slate-700">&ldquo;{confirmDelete.title}&rdquo;</span> will be permanently
+              removed. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={deleting}
+                onClick={() => setConfirmDelete(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={deleting}
+                className="bg-red-600 text-white hover:bg-red-700"
+                onClick={deletePage}
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

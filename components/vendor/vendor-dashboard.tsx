@@ -204,31 +204,53 @@ function statusClass(status: string) {
 
 function StatCard({ label, value, helper, icon: Icon, money }: { label: string; value: number; helper: string; icon: typeof Store; money?: boolean }) {
   return (
-    <div className="rounded-lg border border-white/60 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/80">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{label}</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">
+    <div className="relative overflow-hidden rounded-2xl border-2 border-electric-blue/30 bg-gradient-to-br from-electric-blue/10 via-vibrant-purple/5 to-transparent p-6 shadow-lg hover:shadow-xl transition-all hover:-translate-y-1">
+      {/* Ornamental corners */}
+      <div className="absolute top-0 left-0 w-12 h-12 border-l-2 border-t-2 border-electric-blue/40 rounded-br-lg" />
+      <div className="absolute bottom-0 right-0 w-12 h-12 border-r-2 border-b-2 border-vibrant-purple/40 rounded-tl-lg" />
+      
+      {/* Background pattern */}
+      <div className="absolute inset-0 opacity-5 bg-pattern-dots" />
+      
+      <div className="relative flex items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">{label}</p>
+          <p className="mt-3 text-4xl font-bold bg-gradient-to-r from-electric-blue via-vibrant-purple to-coral-red bg-clip-text text-transparent">
             <CountUp value={value} money={money} />
           </p>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 font-medium">{helper}</p>
         </div>
-        <div className="grid h-10 w-10 place-items-center rounded-lg bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
-          <Icon className="h-5 w-5" />
+        <div className="flex-shrink-0 h-16 w-16 rounded-xl bg-gradient-to-br from-electric-blue/20 to-vibrant-purple/20 border-2 border-electric-blue/30 flex items-center justify-center shadow-md">
+          <Icon className="h-8 w-8 text-electric-blue" />
         </div>
       </div>
-      <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{helper}</p>
+      
+      {/* Decorative bottom line */}
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-electric-blue/50 to-transparent" />
     </div>
   );
 }
 
 function Panel({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-white/70 bg-white/85 p-4 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/80">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-slate-950 dark:text-white">{title}</h2>
+    <section className="relative overflow-hidden rounded-2xl border-2 border-light-slate/40 bg-gradient-to-br from-off-white to-light-slate/20 p-6 shadow-lg backdrop-blur-md">
+      {/* Ornamental top border */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-electric-blue/50 to-transparent" />
+      
+      {/* Ornamental corners */}
+      <div className="absolute top-0 left-0 w-12 h-12 border-l-2 border-t-2 border-electric-blue/30 rounded-br-lg pointer-events-none" />
+      <div className="absolute top-0 right-0 w-12 h-12 border-r-2 border-t-2 border-vibrant-purple/30 rounded-bl-lg pointer-events-none" />
+      
+      <div className="relative mb-5 flex items-center justify-between gap-4">
+        <h2 className="text-lg font-bold text-deep-navy dark:text-white flex items-center gap-2">
+          {title}
+          <div className="h-1 flex-grow bg-gradient-to-r from-electric-blue/50 to-transparent max-w-xs" />
+        </h2>
         {action}
       </div>
-      {children}
+      <div className="relative">
+        {children}
+      </div>
     </section>
   );
 }
@@ -608,22 +630,30 @@ export function VendorDashboard({ snapshot }: VendorDashboardProps) {
               </div>
             ) : null}
 
-            <div className="rounded-lg border border-white/70 bg-gradient-to-r from-slate-950 via-sky-900 to-indigo-900 p-5 text-white shadow-sm">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm text-sky-100">Marketplace seller console</p>
-                  <h2 className="mt-1 text-2xl font-semibold">Manage products, orders, earnings, and customers from one workspace.</h2>
+            <div className="rounded-2xl border-2 border-white/70 bg-gradient-to-r from-deep-navy via-vibrant-purple to-electric-blue p-8 text-white shadow-xl relative overflow-hidden">
+              {/* Decorative pattern overlay */}
+              <div className="absolute inset-0 opacity-10 bg-pattern-dots pointer-events-none" />
+              
+              {/* Ornamental corners */}
+              <div className="absolute top-0 left-0 w-16 h-16 border-l-4 border-t-4 border-white/30" />
+              <div className="absolute bottom-0 right-0 w-16 h-16 border-r-4 border-b-4 border-white/30" />
+              
+              <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-bold uppercase tracking-[0.2em] text-white/80">Marketplace Seller Console</p>
+                  <h2 className="mt-2 text-4xl font-bold leading-tight">Manage everything beautifully</h2>
+                  <p className="mt-3 text-lg text-white/90">Products, orders, earnings, and customers — all in one powerful workspace.</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild className="h-10 bg-white text-slate-950 hover:bg-slate-100">
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild className="h-12 rounded-xl bg-golden-yellow text-deep-navy hover:bg-golden-yellow/90 font-bold shadow-lg hover:shadow-xl">
                     <button type="button" onClick={() => setActiveSection("products")} className="inline-flex items-center gap-2">
-                      <Plus className="h-4 w-4" />
+                      <Plus className="h-5 w-5" />
                       Add Product
                     </button>
                   </Button>
-                  <Button type="button" variant="outline" className="h-10 border-white/40 bg-white/10 text-white hover:bg-white/20" onClick={() => setActiveSection("media")}>
-                      <Upload className="h-4 w-4" />
-                      Upload Media
+                  <Button type="button" variant="outline" className="h-12 rounded-xl border-white/50 bg-white/10 text-white hover:bg-white/20 font-bold backdrop-blur">
+                    <Upload className="h-5 w-5" />
+                    Upload Media
                   </Button>
                 </div>
               </div>

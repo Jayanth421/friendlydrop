@@ -1,5 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/constants";
+
+/**
+ * Resolve the cookie domain so the session is shared across all subdomains.
+ *   app.friendlydrop.in, vendor.friendlydrop.in, admin.friendlydrop.in → .friendlydrop.in
+ *   localhost, vendor.localhost, admin.localhost               → localhost
+ */
+function resolveCookieDomain(request: NextRequest): string | undefined {
+  const host = (request.headers.get("host") ?? "").split(":")[0].toLowerCase();
+  if (host === "friendlydrop.in" || host.endsWith(".friendlydrop.in")) {
+    return ".friendlydrop.in";
+  }
+  if (host === "localhost" || host.endsWith(".localhost")) {
+    return "localhost";
+  }
+  return undefined;
+}
+
 import { getAdminAuth, getUserDisplayName, isFirebaseReady } from "@/lib/firebase/admin";
 import { getUserById, upsertUserProfile } from "@/lib/firebase/firestore";
 import { trackAdminSession } from "@/lib/admin/logs";
@@ -153,6 +170,7 @@ export async function POST(request: NextRequest) {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
+      domain: resolveCookieDomain(request),
     });
 
     return response;
@@ -182,6 +200,7 @@ export async function DELETE(request: NextRequest) {
       value: "",
       maxAge: 0,
       path: "/",
+      domain: resolveCookieDomain(request),
     });
 
     return response;

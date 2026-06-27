@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { upsertUserProfile } from "@/lib/firebase/firestore";
 import { assertRateLimit, buildRateLimitKey } from "@/lib/security/rate-limit";
 import { assertTrustedMutationRequest, toGuardErrorResponse } from "@/lib/security/request-guards";
-import { getAdminAuth, getUserDisplayName, isFirebaseReady } from "@/lib/firebase/admin";
+import { getAdminAuth, getAdminDb, getUserDisplayName, isFirebaseReady } from "@/lib/firebase/admin";
 import { UserRole } from "@/types";
 
 export const runtime = "nodejs";
@@ -41,15 +41,23 @@ export async function POST(request: NextRequest) {
       email?: string;
       password?: string;
       phone?: string;
+      isVendor?: boolean;
+      businessName?: string;
     };
 
     const name = body.name?.trim();
     const email = body.email?.trim().toLowerCase();
     const password = body.password ?? "";
     const phone = normalizePhone(body.phone);
+    const isVendor = body.isVendor === true;
+    const businessName = body.businessName?.trim();
 
     if (!name || !email || !password) {
       return NextResponse.json({ error: "name, email, and password are required" }, { status: 400 });
+    }
+
+    if (isVendor && !businessName) {
+      return NextResponse.json({ error: "Business name is required for vendors" }, { status: 400 });
     }
 
     const userRecord = await getAdminAuth().createUser({
@@ -78,11 +86,27 @@ export async function POST(request: NextRequest) {
         name: getUserDisplayName({ name: userRecord.displayName ?? name, email }),
         email,
         phone,
-        role: "user" as UserRole,
+        role: isVendor ? "vendor" : "user",
         status: "active",
         twoFactorEnabled: false,
         lastLoginAt: new Date().toISOString(),
       });
+
+      if (isVendor) {
+        const db = getAdminDb();
+        await db.collection("vendor_profiles").doc(userRecord.uid).set({
+          id: userRecord.uid,
+          businessName: businessName || name,
+          ownerName: name,
+          email,
+          phone: phone || "",
+          status: "pending",
+          commissionPercent: 10,
+          kycVerified: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
     }
 
     return NextResponse.json({

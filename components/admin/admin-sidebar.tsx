@@ -120,6 +120,7 @@ const navigationSections: Array<{ title: string; items: NavItem[] }> = [
       { href: "/admin/plugins", label: "Plugins", icon: PlugZap, permission: "settings:manage" },
       { href: "/admin/cms", label: "CMS Pages", icon: FileText, permission: "settings:manage" },
       { href: "/admin/settings?tab=sitebuilder", label: "Site Builder", icon: PenTool, permission: "settings:manage" },
+      { href: "/admin/settings/website", label: "Website Settings", icon: Store, permission: "settings:manage" },
       { href: "/admin/settings", label: "Settings", icon: Settings, permission: "settings:manage" },
       { href: "/admin/team", label: "Team", icon: Shield, permission: "team:manage" },
       { href: "/admin/support", label: "Support", icon: Headphones, permission: "support:manage" },
@@ -142,6 +143,11 @@ function isItemActive(pathname: string, searchParams: { get(name: string): strin
     return pathname === "/admin/products";
   }
 
+  // Exact match for settings root (avoid matching /admin/settings/website etc.)
+  if (href === "/admin/settings") {
+    return pathname === "/admin/settings";
+  }
+
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -152,7 +158,7 @@ export function AdminSidebar({ name, role }: { name: string; role: UserRole }) {
   return (
     <Sidebar className="border-r border-stone-200 bg-white/95 shadow-[0_12px_40px_-24px_rgba(17,24,39,0.45)] backdrop-blur">
       <SidebarHeader className="border-b border-stone-200 px-5 py-5">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-sm shrink-0 overflow-hidden border border-stone-100">
             <img src="https://dl.oqens.me/oq-T558-ZGAC-779/WhatsApp_Image_2026-03-29_at_16.39.58-removebg-preview.png" alt="FriendlyDrop Logo" className="w-full h-full object-contain" />
           </div>

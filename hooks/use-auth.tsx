@@ -17,8 +17,8 @@ type AuthContextValue = {
   user: User | null;
   role: UserRole;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, password: string, phone?: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<UserRole>;
+  signup: (name: string, email: string, password: string, phone?: string, isVendor?: boolean, businessName?: string) => Promise<void>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
 };
@@ -140,14 +140,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const response = await fetch("/api/me", { cache: "no-store" });
         if (response.ok) {
           const data = await response.json();
-          setRole(data.user.role as UserRole);
+          const resolvedRole = data.user.role as UserRole;
+          setRole(resolvedRole);
+          return resolvedRole;
         }
+        return "user" as UserRole;
       },
-      signup: async (name, email, password, phone) => {
+      signup: async (name, email, password, phone, isVendor, businessName) => {
         const signupResponse = await fetch("/api/auth/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, password, phone }),
+          body: JSON.stringify({ name, email, password, phone, isVendor, businessName }),
         });
 
         if (!signupResponse.ok) {

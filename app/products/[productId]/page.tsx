@@ -6,11 +6,13 @@ import { RecommendedProducts } from "@/components/product/recommended-products";
 import { ReviewForm } from "@/components/product/review-form";
 import { ReviewList } from "@/components/product/review-list";
 import { TrackProductView } from "@/components/product/track-product-view";
+import Link from "next/link";
 import {
   getProductById,
   getRecommendedProducts,
   getReviews,
   resolveProductPageSectionsForProduct,
+  getVendorProfile,
 } from "@/lib/firebase/firestore";
 import { ProductPageSectionId } from "@/types";
 import { formatCurrency } from "@/lib/utils";
@@ -80,7 +82,7 @@ export default async function ProductDetailPage({ params }: { params: { productI
     twitter: `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`,
   };
 
-  const [reviews, recommendedProducts, productPageSections] = await Promise.all([
+  const [reviews, recommendedProducts, productPageSections, vendorProfile] = await Promise.all([
     getReviews(product.id),
     getRecommendedProducts({
       productId: product.id,
@@ -88,6 +90,7 @@ export default async function ProductDetailPage({ params }: { params: { productI
       limit: 8,
     }),
     resolveProductPageSectionsForProduct(product.id),
+    product.vendorId ? getVendorProfile(product.vendorId) : Promise.resolve(null),
   ]);
 
   const enabledSectionIds = new Set(productPageSections.filter((section) => section.enabled).map((section) => section.id));
@@ -175,6 +178,12 @@ export default async function ProductDetailPage({ params }: { params: { productI
                   ) : null}
                 </div>
               ) : null}
+
+              {vendorProfile && (
+                <p className="text-sm pt-2">
+                  <Link href={`/vendors/${vendorProfile.id}`} className="font-medium text-[#007185] hover:text-[#c40000] hover:underline">Visit the {vendorProfile.businessName} Store</Link>
+                </p>
+              )}
             </div>
 
             {hasSection("sticky_add_to_cart") ? <AddToCartSection product={product} /> : null}
