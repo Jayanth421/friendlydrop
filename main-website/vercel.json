@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "name": "friendlydrop-main-website",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/vendor/(.*)",
+      "destination": "https://vendor.friendlydrop.in/$1",
+      "permanent": true
+    },
+    {
+      "source": "/admin/(.*)",
+      "destination": "https://admin.friendlydrop.in/$1",
+      "permanent": true
+    }
+  ]
+}
