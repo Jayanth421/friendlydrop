@@ -10,8 +10,8 @@ export default async function VendorWalletPage() {
   const user = await requireVendorOrAdmin();
   const isInternalAdmin = isAdminRole(user.role);
   
-  let payouts = [];
-  let orders = [];
+  let payouts: Awaited<ReturnType<typeof getVendorPayouts>> = [];
+  let orders: Awaited<ReturnType<typeof getVendorOrders>>["vendorOrders"] = [];
   
   if (!isInternalAdmin) {
     payouts = await getVendorPayouts(user.uid);

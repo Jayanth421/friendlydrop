@@ -28,6 +28,20 @@ import {
   Play,
   Square,
   X,
+  Star,
+  TrendingUp,
+  Activity,
+  Zap,
+  Filter as FilterIcon,
+  SortDesc,
+  MessageCircle,
+  CreditCard,
+  Archive,
+  ExternalLink,
+  Copy,
+  Info,
+  Sparkles,
+  Heart,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,9 +55,10 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Order as DBOrder, Product } from "@/types";
+import { formatCurrency } from "@/lib/utils";
 
-// Type definitions
-type OrderStatus = "new" | "accepted" | "processing" | "packed" | "shipped" | "delivered" | "cancelled";
+// Type definitions - Enhanced with additional order workflow statuses
+type OrderStatus = "new" | "accepted" | "processing" | "packed" | "ready_to_ship" | "shipped" | "delivered" | "cancelled" | "returned" | "exchange_requested";
 
 interface OrderItem {
   id: string;
@@ -52,63 +67,229 @@ interface OrderItem {
   quantity: number;
   price: number;
   tax: number;
+  sku?: string;
+  image?: string;
 }
 
 interface OrderTimeline {
   status: OrderStatus;
   timestamp: Date;
   label: string;
+  notes?: string;
+  updatedBy?: string;
+  automatic?: boolean;
+}
+
+interface CustomerDetails {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  isVip?: boolean;
+  orderCount?: number;
+  totalSpent?: number;
+}
+
+interface ShippingDetails {
+  courier?: string;
+  trackingNumber?: string;
+  estimatedDelivery?: Date;
+  actualDelivery?: Date;
+  shippingCost?: number;
+  labelGenerated?: boolean;
+}
+
+interface OrderNotes {
+  id: string;
+  note: string;
+  addedBy: string;
+  addedAt: Date;
+  type: "internal" | "customer_visible";
 }
 
 interface Order {
   id: string;
   orderNumber: string;
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
+  customer: CustomerDetails;
   orderDate: Date;
   status: OrderStatus;
+  priority: "normal" | "urgent" | "express";
   items: OrderItem[];
   subtotal: number;
   tax: number;
   shipping: number;
+  discount: number;
   total: number;
-  paymentStatus: "pending" | "completed" | "failed";
+  paymentStatus: "pending" | "completed" | "failed" | "refunded" | "partial_refund";
+  paymentMethod: string;
   shippingAddress: {
     line1: string;
     line2?: string;
     city: string;
     state: string;
     postal: string;
+    country: string;
   };
-  trackingNumber?: string;
+  billingAddress?: {
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    postal: string;
+    country: string;
+  };
+  shippingDetails?: ShippingDetails;
   timeline: OrderTimeline[];
-  notes?: string;
+  notes: OrderNotes[];
+  flags: {
+    hasCustomImage?: boolean;
+    isGift?: boolean;
+    isRush?: boolean;
+    hasCoupon?: boolean;
+  };
+  analytics: {
+    viewCount?: number;
+    updateCount?: number;
+    lastViewed?: Date;
+  };
 }
 
 
 
-const ORDER_STATUSES: { value: OrderStatus; label: string; color: string; bgColor: string; icon: string }[] = [
-  { value: "new", label: "New", color: "text-sky-700", bgColor: "bg-sky-50 border-sky-200", icon: "" },
-  { value: "accepted", label: "Accepted", color: "text-indigo-700", bgColor: "bg-indigo-50 border-indigo-200", icon: "" },
-  { value: "processing", label: "Processing", color: "text-purple-700", bgColor: "bg-purple-50 border-purple-200", icon: "" },
-  { value: "packed", label: "Packed", color: "text-orange-700", bgColor: "bg-orange-50 border-orange-200", icon: "" },
-  { value: "shipped", label: "Shipped", color: "text-cyan-700", bgColor: "bg-cyan-50 border-cyan-200", icon: "" },
-  { value: "delivered", label: "Delivered", color: "text-emerald-700", bgColor: "bg-emerald-50 border-emerald-200", icon: "" },
-  { value: "cancelled", label: "Cancelled", color: "text-rose-700", bgColor: "bg-rose-50 border-rose-200", icon: "" },
+const ORDER_STATUSES: { 
+  value: OrderStatus; 
+  label: string; 
+  color: string; 
+  bgColor: string; 
+  icon: React.ReactNode;
+  description: string;
+  nextStatuses: OrderStatus[];
+}[] = [
+  { 
+    value: "new", 
+    label: "New Order", 
+    color: "text-sky-700", 
+    bgColor: "bg-gradient-to-r from-sky-50 to-blue-50 border-sky-300", 
+    icon: <Sparkles className="w-4 h-4" />,
+    description: "Fresh order just received",
+    nextStatuses: ["accepted", "cancelled"]
+  },
+  { 
+    value: "accepted", 
+    label: "Accepted", 
+    color: "text-indigo-700", 
+    bgColor: "bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-300", 
+    icon: <CheckCircle className="w-4 h-4" />,
+    description: "Order confirmed and accepted",
+    nextStatuses: ["processing", "cancelled"]
+  },
+  { 
+    value: "processing", 
+    label: "Processing", 
+    color: "text-purple-700", 
+    bgColor: "bg-gradient-to-r from-purple-50 to-violet-50 border-purple-300", 
+    icon: <Activity className="w-4 h-4" />,
+    description: "Order is being prepared",
+    nextStatuses: ["packed", "cancelled"]
+  },
+  { 
+    value: "packed", 
+    label: "Packed", 
+    color: "text-orange-700", 
+    bgColor: "bg-gradient-to-r from-orange-50 to-amber-50 border-orange-300", 
+    icon: <Package className="w-4 h-4" />,
+    description: "Order packed and ready",
+    nextStatuses: ["ready_to_ship", "cancelled"]
+  },
+  { 
+    value: "ready_to_ship", 
+    label: "Ready to Ship", 
+    color: "text-amber-700", 
+    bgColor: "bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-300", 
+    icon: <Zap className="w-4 h-4" />,
+    description: "Awaiting courier pickup",
+    nextStatuses: ["shipped", "cancelled"]
+  },
+  { 
+    value: "shipped", 
+    label: "Shipped", 
+    color: "text-cyan-700", 
+    bgColor: "bg-gradient-to-r from-cyan-50 to-teal-50 border-cyan-300", 
+    icon: <Truck className="w-4 h-4" />,
+    description: "Order dispatched to customer",
+    nextStatuses: ["delivered", "returned"]
+  },
+  { 
+    value: "delivered", 
+    label: "Delivered", 
+    color: "text-emerald-700", 
+    bgColor: "bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-300", 
+    icon: <CheckCheck className="w-4 h-4" />,
+    description: "Successfully delivered",
+    nextStatuses: ["returned", "exchange_requested"]
+  },
+  { 
+    value: "cancelled", 
+    label: "Cancelled", 
+    color: "text-rose-700", 
+    bgColor: "bg-gradient-to-r from-rose-50 to-red-50 border-rose-300", 
+    icon: <X className="w-4 h-4" />,
+    description: "Order was cancelled",
+    nextStatuses: []
+  },
+  { 
+    value: "returned", 
+    label: "Returned", 
+    color: "text-slate-700", 
+    bgColor: "bg-gradient-to-r from-slate-50 to-gray-50 border-slate-300", 
+    icon: <Archive className="w-4 h-4" />,
+    description: "Order returned by customer",
+    nextStatuses: []
+  },
+  { 
+    value: "exchange_requested", 
+    label: "Exchange Request", 
+    color: "text-violet-700", 
+    bgColor: "bg-gradient-to-r from-violet-50 to-purple-50 border-violet-300", 
+    icon: <RefreshCw className="w-4 h-4" />,
+    description: "Customer requested exchange",
+    nextStatuses: ["processing", "cancelled"]
+  },
 ];
+
+const PRIORITY_CONFIG = {
+  normal: { label: "Normal", color: "text-stone-600", bg: "bg-stone-100", icon: "📦" },
+  urgent: { label: "Urgent", color: "text-orange-600", bg: "bg-orange-100", icon: "⚡" },
+  express: { label: "Express", color: "text-red-600", bg: "bg-red-100", icon: "🚀" },
+};
+
+const PAYMENT_STATUS_CONFIG = {
+  pending: { label: "Pending", color: "text-amber-600", bg: "bg-amber-100", icon: <Clock className="w-3 h-3" /> },
+  completed: { label: "Completed", color: "text-emerald-600", bg: "bg-emerald-100", icon: <CheckCircle className="w-3 h-3" /> },
+  failed: { label: "Failed", color: "text-red-600", bg: "bg-red-100", icon: <X className="w-3 h-3" /> },
+  refunded: { label: "Refunded", color: "text-blue-600", bg: "bg-blue-100", icon: <RefreshCw className="w-3 h-3" /> },
+  partial_refund: { label: "Partial Refund", color: "text-purple-600", bg: "bg-purple-100", icon: <RefreshCw className="w-3 h-3" /> },
+};
 
 // Utility functions
 function getStatusInfo(status: OrderStatus) {
   return ORDER_STATUSES.find((s) => s.value === status) || ORDER_STATUSES[0];
 }
 
-function getStatusIcon(status: OrderStatus): string {
-  return "";
+function getStatusIcon(status: OrderStatus): React.ReactNode {
+  return getStatusInfo(status).icon;
 }
 
-function formatCurrency(amount: number): string {
-  return `₹${amount.toFixed(2)}`;
+function getPriorityInfo(priority: string) {
+  return PRIORITY_CONFIG[priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.normal;
+}
+
+function getPaymentStatusInfo(status: string) {
+  return PAYMENT_STATUS_CONFIG[status as keyof typeof PAYMENT_STATUS_CONFIG] || PAYMENT_STATUS_CONFIG.pending;
+}
+
+function formatCurrencyEnhanced(amount: number): string {
+  return `₹${amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 }
 
 function formatDate(date: Date): string {
@@ -129,7 +310,37 @@ function formatDateTime(date: Date): string {
   });
 }
 
-// Status Update Dialog
+function formatTimeAgo(date: Date): string {
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return formatDate(date);
+}
+
+function getOrderPriorityScore(order: Order): number {
+  let score = 0;
+  if (order.priority === "express") score += 3;
+  if (order.priority === "urgent") score += 2;
+  if (order.flags.isRush) score += 2;
+  if (order.flags.hasCustomImage) score += 1;
+  if (order.customer.isVip) score += 1;
+  return score;
+}
+
+function shouldHighlightOrder(order: Order): boolean {
+  return getOrderPriorityScore(order) >= 2 ||
+         ["new", "accepted"].includes(order.status) ||
+         (order.customer.isVip === true);
+}
+
+// Enhanced Status Update Dialog with comprehensive workflow
 function StatusUpdateDialog({ 
   order, 
   isOpen, 
@@ -139,38 +350,46 @@ function StatusUpdateDialog({
   order: Order | null; 
   isOpen: boolean; 
   onClose: () => void; 
-  onUpdateStatus: (orderId: string, newStatus: OrderStatus) => void;
+  onUpdateStatus: (orderId: string, newStatus: OrderStatus, notes?: string) => void;
 }) {
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | null>(null);
+  const [notes, setNotes] = useState("");
+  const [trackingNumber, setTrackingNumber] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    if (order) {
+      setSelectedStatus(null);
+      setNotes("");
+      setTrackingNumber(order.shippingDetails?.trackingNumber || "");
+    }
+  }, [order]);
 
   if (!isOpen || !order) return null;
 
-  // Get next possible statuses based on current status
-  const getNextStatuses = (currentStatus: OrderStatus): OrderStatus[] => {
-    switch (currentStatus) {
-      case "new": return ["accepted", "cancelled"];
-      case "accepted": return ["processing", "cancelled"];
-      case "processing": return ["packed", "cancelled"];
-      case "packed": return ["shipped", "cancelled"];
-      case "shipped": return ["delivered"];
-      case "delivered": return [];
-      case "cancelled": return [];
-      default: return [];
-    }
-  };
-
-  const nextStatuses = getNextStatuses(order.status);
+  const statusInfo = getStatusInfo(order.status);
+  const nextStatuses = statusInfo.nextStatuses;
 
   const handleUpdateStatus = async () => {
     if (!selectedStatus) return;
     
     setIsUpdating(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      onUpdateStatus(order.id, selectedStatus);
-      toast.success(`Order status updated to ${getStatusInfo(selectedStatus).label}`);
+      // Simulate API call with enhanced tracking
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Add tracking number if shipping
+      let finalNotes = notes;
+      if (selectedStatus === "shipped" && trackingNumber) {
+        finalNotes += `${finalNotes ? ' | ' : ''}Tracking: ${trackingNumber}`;
+      }
+      
+      onUpdateStatus(order.id, selectedStatus, finalNotes);
+      toast.success(`Order status updated to ${getStatusInfo(selectedStatus).label}`, {
+        description: finalNotes || "Status change recorded successfully",
+        icon: getStatusInfo(selectedStatus).icon,
+        duration: 4000,
+      });
       onClose();
     } catch (error) {
       toast.error("Failed to update order status");
@@ -180,69 +399,90 @@ function StatusUpdateDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white shadow-2xl animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="border-b border-stone-200 px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+      <div className="w-full max-w-2xl rounded-3xl border-2 border-stone-200 bg-gradient-to-br from-white via-stone-50 to-white shadow-2xl animate-in zoom-in-95 duration-300">
+        {/* Enhanced Header */}
+        <div className="border-b border-stone-200 px-8 py-6 bg-gradient-to-r from-blue-50 to-purple-50">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <RefreshCw className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-bold text-stone-900">Update Order Status</h2>
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl text-white shadow-lg">
+                <RefreshCw className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-stone-900">Update Order Status</h2>
+                <p className="text-sm text-stone-600 mt-1">
+                  Manage order {order.orderNumber} for {order.customer.name}
+                </p>
+              </div>
             </div>
             <button
               onClick={onClose}
               disabled={isUpdating}
-              className="text-stone-400 hover:text-stone-600 hover:bg-stone-100 rounded-lg p-1 transition-colors"
+              className="text-stone-400 hover:text-stone-600 hover:bg-white/80 rounded-xl p-2 transition-all"
             >
-              <X className="h-5 w-5" />
+              <X className="h-6 w-6" />
             </button>
           </div>
-          <p className="text-sm text-stone-600 mt-1">
-            Update the status for order {order.orderNumber}
-          </p>
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(100vh-250px)] px-6 py-4 space-y-4">
-          {/* Current Status */}
-          <div className="p-3 bg-stone-50 rounded-lg border">
-            <p className="text-xs text-stone-600 uppercase tracking-wider">Current Status</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-lg">{getStatusIcon(order.status)}</span>
-              <span className="font-semibold text-stone-900">{getStatusInfo(order.status).label}</span>
+        <div className="overflow-y-auto max-h-[calc(100vh-250px)] px-8 py-6 space-y-6">
+          {/* Current Status Display */}
+          <div className="p-5 bg-gradient-to-r from-stone-50 to-stone-100 rounded-2xl border border-stone-200">
+            <p className="text-xs text-stone-600 uppercase tracking-wider font-bold mb-3">Current Status</p>
+            <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-xl ${statusInfo.bgColor}`}>
+                {statusInfo.icon}
+              </div>
+              <div>
+                <p className={`font-bold text-lg ${statusInfo.color}`}>{statusInfo.label}</p>
+                <p className="text-sm text-stone-600">{statusInfo.description}</p>
+                <p className="text-xs text-stone-500 mt-1">
+                  Last updated {formatTimeAgo(order.timeline[0]?.timestamp || new Date())}
+                </p>
+              </div>
             </div>
           </div>
 
           {/* Next Status Selection */}
           {nextStatuses.length > 0 ? (
             <div>
-              <p className="text-sm font-semibold text-stone-900 mb-3">Select New Status:</p>
-              <div className="space-y-2">
+              <p className="text-lg font-bold text-stone-900 mb-4 flex items-center gap-2">
+                <ArrowRight className="w-5 h-5 text-blue-600" />
+                Select New Status
+              </p>
+              <div className="grid gap-3">
                 {nextStatuses.map((status) => {
-                  const statusInfo = getStatusInfo(status);
+                  const nextStatusInfo = getStatusInfo(status);
                   return (
                     <button
                       key={status}
                       onClick={() => setSelectedStatus(status)}
-                      className={`w-full p-3 text-left rounded-lg border transition-all ${
+                      className={`w-full p-4 text-left rounded-xl border-2 transition-all duration-200 ${
                         selectedStatus === status
-                          ? `${statusInfo.bgColor} ring-2 ring-blue-500 ring-offset-2`
-                          : `${statusInfo.bgColor} hover:ring-1 hover:ring-blue-300`
+                          ? `${nextStatusInfo.bgColor} ring-4 ring-blue-300 ring-offset-2 scale-[1.02]`
+                          : `${nextStatusInfo.bgColor} hover:ring-2 hover:ring-blue-200 hover:scale-[1.01]`
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">{getStatusIcon(status)}</span>
-                        <div>
-                          <p className={`font-semibold ${statusInfo.color}`}>{statusInfo.label}</p>
-                          <p className="text-xs text-stone-600">
-                            {status === "accepted" && "Accept this order and start processing"}
-                            {status === "processing" && "Order is being prepared"}
-                            {status === "packed" && "Order has been packed and ready to ship"}
-                            {status === "shipped" && "Order has been shipped to customer"}
-                            {status === "delivered" && "Order has been delivered successfully"}
-                            {status === "cancelled" && "Cancel this order"}
-                          </p>
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2 rounded-lg ${nextStatusInfo.bgColor}`}>
+                          {nextStatusInfo.icon}
                         </div>
+                        <div className="flex-1">
+                          <p className={`font-bold text-lg ${nextStatusInfo.color}`}>{nextStatusInfo.label}</p>
+                          <p className="text-sm text-stone-600">{nextStatusInfo.description}</p>
+                          {status === "shipped" && (
+                            <div className="mt-2 flex items-center gap-2 text-xs text-stone-500">
+                              <Truck className="w-3 h-3" />
+                              Will require tracking number
+                            </div>
+                          )}
+                        </div>
+                        {selectedStatus === status && (
+                          <div className="text-blue-600">
+                            <CheckCircle className="w-6 h-6" />
+                          </div>
+                        )}
                       </div>
                     </button>
                   );
@@ -250,33 +490,78 @@ function StatusUpdateDialog({
               </div>
             </div>
           ) : (
-            <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-              <p className="text-emerald-700 font-semibold">No further status updates available</p>
-              <p className="text-xs text-emerald-600 mt-1">This order has reached its final status</p>
+            <div className="p-6 bg-gradient-to-br from-emerald-50 to-cyan-50 rounded-2xl border-2 border-emerald-200">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-emerald-500 rounded-xl text-white">
+                  <CheckCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-emerald-800 font-bold text-lg">Order Complete</p>
+                  <p className="text-sm text-emerald-600 mt-1">This order has reached its final status</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Conditional Fields */}
+          {selectedStatus === "shipped" && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-stone-700 mb-2">
+                  Tracking Number *
+                </label>
+                <Input
+                  value={trackingNumber}
+                  onChange={(e) => setTrackingNumber(e.target.value)}
+                  placeholder="Enter tracking number"
+                  className="border-stone-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Notes Section */}
+          {selectedStatus && (
+            <div>
+              <label className="block text-sm font-bold text-stone-700 mb-2">
+                Notes (Optional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add any additional notes about this status update..."
+                className="w-full rounded-xl border-2 border-stone-200 p-4 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-none"
+                rows={3}
+              />
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-stone-200 flex items-center justify-end gap-3 px-6 py-4">
-          <Button variant="outline" onClick={onClose} disabled={isUpdating} className="border-stone-200 hover:bg-stone-50 rounded-lg">
+        {/* Enhanced Footer */}
+        <div className="border-t border-stone-200 flex items-center justify-end gap-4 px-8 py-6 bg-gradient-to-r from-stone-50 to-stone-100">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={isUpdating}
+            className="border-2 border-stone-300 hover:bg-white rounded-xl px-6 py-3"
+          >
             Cancel
           </Button>
           {nextStatuses.length > 0 && (
             <Button 
               onClick={handleUpdateStatus}
-              disabled={!selectedStatus || isUpdating}
-              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
+              disabled={!selectedStatus || isUpdating || (selectedStatus === "shipped" && !trackingNumber)}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-bold px-8 py-3 shadow-lg"
             >
               {isUpdating ? (
                 <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Updating...
+                  <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                  Updating Status...
                 </>
               ) : (
                 <>
-                  <CheckCheck className="w-4 h-4 mr-2" />
-                  Update Status
+                  <CheckCheck className="w-5 h-5 mr-2" />
+                  Update to {selectedStatus ? getStatusInfo(selectedStatus).label : ""}
                 </>
               )}
             </Button>
@@ -432,7 +717,7 @@ function OrderDetailsModal({
           {/* Status Badge */}
           <div>
             <Badge className={`px-4 py-2 text-sm font-semibold border ${getStatusInfo(order.status).bgColor}`}>
-              {getStatusIcon(order.status)} {getStatusInfo(order.status).label}
+              <span className="mr-1">{getStatusIcon(order.status)}</span>{getStatusInfo(order.status).label}
             </Badge>
           </div>
 
@@ -444,21 +729,21 @@ function OrderDetailsModal({
                 <User className="w-5 h-5 text-blue-600 flex-shrink-0 mt-1" />
                 <div>
                   <p className="text-xs text-stone-600 uppercase tracking-wider">Name</p>
-                  <p className="font-semibold text-stone-900">{order.customerName}</p>
+                  <p className="font-semibold text-stone-900">{order.customer.name}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <Mail className="w-5 h-5 text-purple-600 flex-shrink-0 mt-1" />
                 <div>
                   <p className="text-xs text-stone-600 uppercase tracking-wider">Email</p>
-                  <p className="font-semibold text-stone-900 break-all">{order.customerEmail}</p>
+                  <p className="font-semibold text-stone-900 break-all">{order.customer.email}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <Phone className="w-5 h-5 text-rose-600 flex-shrink-0 mt-1" />
                 <div>
                   <p className="text-xs text-stone-600 uppercase tracking-wider">Phone</p>
-                  <p className="font-semibold text-stone-900">{order.customerPhone}</p>
+                  <p className="font-semibold text-stone-900">{order.customer.phone}</p>
                 </div>
               </div>
             </div>
@@ -495,10 +780,10 @@ function OrderDetailsModal({
             <p className="text-sm text-stone-900">{order.shippingAddress.line1}</p>
             {order.shippingAddress.line2 && <p className="text-sm text-stone-900">{order.shippingAddress.line2}</p>}
             <p className="text-sm text-stone-900">{order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.postal}</p>
-            {order.trackingNumber && (
+            {order.shippingDetails?.trackingNumber && (
               <div className="mt-3 p-2 bg-white rounded border border-emerald-300">
                 <p className="text-xs text-stone-600">Tracking Number</p>
-                <p className="font-mono font-semibold text-stone-900">{order.trackingNumber}</p>
+                <p className="font-mono font-semibold text-stone-900">{order.shippingDetails.trackingNumber}</p>
               </div>
             )}
           </div>
@@ -575,7 +860,7 @@ function OrderRow({ order, onViewDetails }: { order: Order; onViewDetails: (orde
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <div>
               <p className="text-xs text-stone-600 uppercase tracking-wider">Customer</p>
-              <p className="font-semibold text-stone-900 truncate">{order.customerName}</p>
+              <p className="font-semibold text-stone-900 truncate">{order.customer.name}</p>
             </div>
             <div>
               <p className="text-xs text-stone-600 uppercase tracking-wider">Order Date</p>
@@ -621,34 +906,50 @@ export function VendorOrdersContent({ initialOrders, vendorProducts }: { initial
       tax: (item.price * (o.taxRate || 0)) / 100,
     }));
     
+    const subtotal = vendorItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const tax = vendorItems.reduce((acc, item) => acc + (item.price * item.quantity * (o.taxRate || 0) / 100), 0);
     return {
       id: o.id,
       orderNumber: o.id.slice(0, 8).toUpperCase(),
-      customerName: o.address.fullName,
-      customerEmail: "customer@example.com",
-      customerPhone: o.address.phone,
+      customer: {
+        id: o.userId,
+        name: o.address.fullName,
+        email: "customer@example.com",
+        phone: o.address.phone,
+        isVip: false,
+      },
       orderDate: new Date(o.createdAt),
       status: (["pending", "confirmed"].includes(o.status) ? "new" : o.status === "refunded" ? "cancelled" : o.status) as OrderStatus,
+      priority: (o.priority || "normal") as "normal" | "urgent" | "express",
       items,
-      subtotal: vendorItems.reduce((acc, item) => acc + (item.price * item.quantity), 0),
-      tax: vendorItems.reduce((acc, item) => acc + (item.price * item.quantity * (o.taxRate || 0) / 100), 0),
+      subtotal,
+      tax,
       shipping: o.deliveryFee || 0,
-      total: vendorItems.reduce((acc, item) => acc + (item.price * item.quantity), 0),
-      paymentStatus: (o.payment.status === "success" ? "completed" : o.payment.status) as any,
+      discount: o.discountAmount || 0,
+      total: subtotal + tax + (o.deliveryFee || 0) - (o.discountAmount || 0),
+      paymentStatus: (o.payment.status === "success" ? "completed" : o.payment.status === "failed" ? "failed" : "pending") as "pending" | "completed" | "failed" | "refunded" | "partial_refund",
+      paymentMethod: o.payment.provider || "unknown",
       shippingAddress: {
         line1: o.address.line1,
         line2: o.address.line2,
         city: o.address.city,
         state: o.address.state,
         postal: o.address.postalCode,
+        country: o.address.country || "IN",
       },
-      trackingNumber: o.shipping?.trackingId,
+      shippingDetails: o.shipping ? {
+        trackingNumber: o.shipping.trackingId,
+      } : undefined,
       timeline: o.timeline?.map(t => ({
         status: (["pending", "confirmed"].includes(t.status) ? "new" : t.status === "refunded" ? "cancelled" : t.status) as OrderStatus,
         timestamp: new Date(t.at),
         label: t.note || t.status,
       })) || [],
-      notes: o.payment.notes,
+      notes: [],
+      flags: {
+        hasCoupon: !!o.couponCode,
+      },
+      analytics: {},
     } as Order;
   }), [initialOrders, vendorProducts]);
 
@@ -724,15 +1025,11 @@ export function VendorOrdersContent({ initialOrders, vendorProducts }: { initial
 
   // Calculate status counts
   const statusCounts = useMemo(() => {
-    return {
-      new: orders.filter((o) => o.status === "new").length,
-      accepted: orders.filter((o) => o.status === "accepted").length,
-      processing: orders.filter((o) => o.status === "processing").length,
-      packed: orders.filter((o) => o.status === "packed").length,
-      shipped: orders.filter((o) => o.status === "shipped").length,
-      delivered: orders.filter((o) => o.status === "delivered").length,
-      cancelled: orders.filter((o) => o.status === "cancelled").length,
-    };
+    const counts: Partial<Record<OrderStatus, number>> = {};
+    ORDER_STATUSES.forEach((s) => {
+      counts[s.value] = orders.filter((o) => o.status === s.value).length;
+    });
+    return counts;
   }, [orders]);
 
   // Filter orders
@@ -745,8 +1042,8 @@ export function VendorOrdersContent({ initialOrders, vendorProducts }: { initial
       result = result.filter(
         (o) =>
           o.orderNumber.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          o.customerEmail.toLowerCase().includes(q)
+          o.customer.name.toLowerCase().includes(q) ||
+          o.customer.email.toLowerCase().includes(q)
       );
     }
 

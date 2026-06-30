@@ -18,18 +18,16 @@ export function LogoutDialog({
   const handleLogout = async () => {
     setIsLoading(true);
     try {
-      // Call the logout API endpoint
       const response = await fetch("/api/auth/session", {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
       });
 
       if (response.ok) {
-        // Redirect to home page
-        router.push("/");
-        router.refresh();
+        // Redirect to /login on whatever domain we are currently on.
+        // This works correctly on admin.friendlydrop.in, vendor.friendlydrop.in,
+        // and on localhost without any hardcoded URL.
+        window.location.href = "/login";
       } else {
         console.error("Logout failed");
         setIsLoading(false);

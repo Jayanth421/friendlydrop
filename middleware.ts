@@ -1,127 +1,163 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// ---------------------------------------------------------------------------
-// Subdomain detection
-// ---------------------------------------------------------------------------
-// Supported subdomains:
-//   vendor.friendlydrop.in  → rewrites to /vendor/*
-//   admin.friendlydrop.in   → rewrites to /admin/*
-//   app.friendlydrop.in     → main storefront (no rewrite)
-//
-// Local dev (edit /etc/hosts or C:\Windows\System32\drivers\etc\hosts):
-//   127.0.0.1  vendor.localhost  admin.localhost  app.localhost
-//   Then visit http://vendor.localhost:3000
-// ---------------------------------------------------------------------------
+// ─── Subdomain detection ────────────────────────────────────────────────────
 
-type Zone = "vendor" | "admin" | "app" | null;
+/**
+ * Returns which subdomain the request is for, or null for the main domain.
+ *
+ * Production:
+ *   admin.friendlydrop.in  → "admin"
+ *   vendor.friendlydrop.in → "vendor"
+ *   friendlydrop.in        → null
+ *
+ * Local dev (add to /etc/hosts or use subdomains via env):
+ *   admin.localhost:3000   → "admin"
+ *   vendor.localhost:3000  → "vendor"
+ *   localhost:3000         → null
+ */
+function detectSubdomain(request: NextRequest): "admin" | "vendor" | null {
+  const host = (request.headers.get("host") ?? "").toLowerCase();
+  const hostname = host.split(":")[0]; // strip port
 
-function getZone(hostname: string): Zone {
-  // Strip port
-  const host = hostname.split(":")[0].toLowerCase();
-
-  // Local development: *.localhost
-  if (host === "vendor.localhost") return "vendor";
-  if (host === "admin.localhost") return "admin";
-  if (host === "app.localhost" || host === "localhost") return "app";
-
-  // Production: *.friendlydrop.in
-  if (host === "vendor.friendlydrop.in") return "vendor";
-  if (host === "admin.friendlydrop.in") return "admin";
-  if (host === "app.friendlydrop.in" || host === "friendlydrop.in") return "app";
-
+  if (hostname === "admin.friendlydrop.in" || hostname === "admin.localhost") {
+    return "admin";
+  }
+  if (hostname === "vendor.friendlydrop.in" || hostname === "vendor.localhost") {
+    return "vendor";
+  }
   return null;
 }
 
-/** Returns the base URL for the main storefront (used for auth redirects). */
-function getMainAppOrigin(request: NextRequest): string {
-  const hostname = request.headers.get("host") || "";
-  const isLocal = hostname.includes("localhost");
-  if (isLocal) {
-    const port = hostname.split(":")[1] || "3000";
-    return `http://localhost:${port}`;
-  }
-  return "https://app.friendlydrop.in";
-}
+// ─── Auth-protected paths on the main domain ────────────────────────────────
 
-// Auth-protected paths (as they appear *after* rewriting)
-const AUTH_PREFIXES = ["/cart", "/checkout", "/orders", "/wishlist", "/account", "/vendor", "/admin-2fa"];
-const ADMIN_PREFIX = "/admin";
+const AUTH_PREFIXES = ["/cart", "/checkout", "/orders", "/wishlist", "/account", "/admin-2fa"];
 
-// Paths that should never be rewritten (shared auth pages, API, static)
-const PASSTHROUGH_PREFIXES = ["/api", "/login", "/signup", "/forgot-password", "/reset-password", "/_next", "/favicon.ico"];
+// ─── Middleware ──────────────────────────────────────────────────────────────
 
 export function middleware(request: NextRequest) {
-  const hostname = request.headers.get("host") || "";
-  const zone = getZone(hostname);
   const { pathname } = request.nextUrl;
+  const subdomain = detectSubdomain(request);
 
-  // ------------------------------------------------------------------
-  // 1. Compute the internally-rewritten pathname
-  // ------------------------------------------------------------------
-  let internalPath = pathname;
+  // ── Skip static / Next internals ──────────────────────────────────────────
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api/") ||
+    pathname === "/favicon.ico"
+  ) {
+    return addSecurityHeaders(NextResponse.next());
+  }
 
-  if (zone === "vendor" || zone === "admin") {
-    const prefix = zone === "vendor" ? "/vendor" : "/admin";
-    const isPassthrough = PASSTHROUGH_PREFIXES.some((p) => pathname.startsWith(p));
+  // ── ADMIN subdomain (admin.friendlydrop.in) ───────────────────────────────
+  if (subdomain === "admin") {
+    const session = request.cookies.get("friendlydrop_session")?.value;
 
-    if (!isPassthrough && !pathname.startsWith(prefix)) {
-      // / → /vendor/dashboard  or  /admin/dashboard
-      if (pathname === "/" || pathname === "") {
-        internalPath = `${prefix}/dashboard`;
-      } else {
-        internalPath = `${prefix}${pathname}`;
-      }
+    // Serve login / public pages as-is (no rewrite needed)
+    if (pathname === "/login" || pathname.startsWith("/api/")) {
+      return addSecurityHeaders(NextResponse.next());
     }
+
+    // Already prefixed by client-side Link (e.g. /admin/dashboard) — pass through
+    // Only add /admin prefix for clean paths like /dashboard, /orders, /
+    const internalPath = pathname.startsWith("/admin")
+      ? pathname
+      : pathname === "/"
+      ? "/admin/control-tower"
+      : `/admin${pathname}`;
+
+    const rewriteUrl = new URL(internalPath, request.url);
+
+    if (!session) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("redirect", pathname);
+      return addSecurityHeaders(NextResponse.redirect(loginUrl));
+    }
+
+    return addSecurityHeaders(NextResponse.rewrite(rewriteUrl));
   }
 
-  // ------------------------------------------------------------------
-  // 2. Auth checks (evaluated against the *internal* path)
-  // ------------------------------------------------------------------
+  // ── VENDOR subdomain (vendor.friendlydrop.in) ─────────────────────────────
+  if (subdomain === "vendor") {
+    const session = request.cookies.get("friendlydrop_session")?.value;
+
+    // Serve login / public pages as-is
+    if (pathname === "/login" || pathname.startsWith("/api/")) {
+      return addSecurityHeaders(NextResponse.next());
+    }
+
+    // Already prefixed by client-side Link (e.g. /vendor/dashboard) — pass through
+    const internalPath = pathname.startsWith("/vendor")
+      ? pathname
+      : pathname === "/"
+      ? "/vendor/dashboard"
+      : `/vendor${pathname}`;
+
+    const rewriteUrl = new URL(internalPath, request.url);
+
+    if (!session) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("redirect", pathname);
+      return addSecurityHeaders(NextResponse.redirect(loginUrl));
+    }
+
+    return addSecurityHeaders(NextResponse.rewrite(rewriteUrl));
+  }
+
+  // ── MAIN domain (friendlydrop.in) ─────────────────────────────────────────
+
+  // Redirect /admin/* to admin subdomain
+  if (pathname.startsWith("/admin")) {
+    const adminBase =
+      process.env.NEXT_PUBLIC_ADMIN_URL ??
+      (request.nextUrl.hostname.includes("localhost")
+        ? `http://admin.localhost:${request.nextUrl.port || 3000}`
+        : "https://admin.friendlydrop.in");
+
+    const subPath = pathname.replace(/^\/admin/, "") || "/";
+    const destination = new URL(subPath, adminBase);
+    destination.search = request.nextUrl.search;
+    return addSecurityHeaders(NextResponse.redirect(destination));
+  }
+
+  // Redirect /vendor/* to vendor subdomain
+  if (pathname.startsWith("/vendor")) {
+    const vendorBase =
+      process.env.NEXT_PUBLIC_VENDOR_URL ??
+      (request.nextUrl.hostname.includes("localhost")
+        ? `http://vendor.localhost:${request.nextUrl.port || 3000}`
+        : "https://vendor.friendlydrop.in");
+
+    const subPath = pathname.replace(/^\/vendor/, "") || "/";
+    const destination = new URL(subPath, vendorBase);
+    destination.search = request.nextUrl.search;
+    return addSecurityHeaders(NextResponse.redirect(destination));
+  }
+
+  // Normal main-domain auth guard for customer pages
   const session = request.cookies.get("friendlydrop_session")?.value;
-  const needsAuth = AUTH_PREFIXES.some((p) => internalPath.startsWith(p));
-  const needsAdminAuth = internalPath.startsWith(ADMIN_PREFIX);
+  const needsAuth = AUTH_PREFIXES.some((p) => pathname.startsWith(p));
 
-  let response: NextResponse;
-
-  if ((needsAuth || needsAdminAuth) && !session) {
-    // For vendor / admin zones redirect to the main app login
-    const loginBase =
-      zone === "vendor" || zone === "admin"
-        ? getMainAppOrigin(request)
-        : request.nextUrl.origin;
-
-    const loginUrl = new URL("/login", loginBase);
-    // Pass original pathname (pre-rewrite) so the login page can redirect back
+  if (needsAuth && !session) {
+    const loginUrl = new URL("/login", request.nextUrl.origin);
     loginUrl.searchParams.set("redirect", pathname);
-    response = NextResponse.redirect(loginUrl);
-  } else if (internalPath !== pathname) {
-    // Rewrite to the correct internal route
-    const rewritten = request.nextUrl.clone();
-    rewritten.pathname = internalPath;
-    response = NextResponse.rewrite(rewritten);
-  } else {
-    response = NextResponse.next();
+    return addSecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
-  // ------------------------------------------------------------------
-  // 3. Security headers
-  // ------------------------------------------------------------------
+  return addSecurityHeaders(NextResponse.next());
+}
+
+function addSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set("X-DNS-Prefetch-Control", "on");
   response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "origin-when-cross-origin");
-
   return response;
 }
 
 export const config = {
   matcher: [
     /*
-     * Match all request paths EXCEPT:
-     *  - _next/static (static assets)
-     *  - _next/image  (image optimisation)
-     *  - favicon.ico
+     * Match all request paths EXCEPT _next/static, _next/image, favicon.ico
      */
     "/((?!_next/static|_next/image|favicon.ico).*)",
   ],

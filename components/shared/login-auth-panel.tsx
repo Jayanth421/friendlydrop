@@ -32,30 +32,45 @@ function getLoginErrorMessage(error: unknown) {
 }
 
 /**
- * Returns the full URL for the zone that owns a given role.
+ * Returns the internal route for a given role.
  * Returns null for regular "user" role (stays on main app).
  */
 const ADMIN_ROLES = new Set(["staff", "manager", "admin", "super_admin"]);
 
-function getZoneUrl(role: string): string | null {
-  if (typeof window === "undefined") return null;
+/**
+ * Returns the full URL to redirect to after login, based on the user's role.
+ * - Vendors  → vendor.friendlydrop.in (or vendor.localhost:PORT in dev)
+ * - Admins   → admin.friendlydrop.in  (or admin.localhost:PORT in dev)
+ * - Customers → null (stays on main domain)
+ */
+function getRoleRedirectUrl(role: string): string | null {
+  const vendorUrl = process.env.NEXT_PUBLIC_VENDOR_URL;
+  const adminUrl  = process.env.NEXT_PUBLIC_ADMIN_URL;
 
-  const hostname = window.location.hostname; // e.g. "localhost" or "app.friendlydrop.in"
-  const isLocal = hostname === "localhost" || hostname.endsWith(".localhost");
-  const port = window.location.port ? `:${window.location.port}` : "";
+  // Fall back to subdomain.localhost when env vars aren't set (local dev)
+  const isLocalhost =
+    typeof window !== "undefined" && window.location.hostname === "localhost";
+  const port = typeof window !== "undefined" ? window.location.port : "3000";
 
   if (role === "vendor") {
-    return isLocal
-      ? `http://vendor.localhost${port}`
-      : "https://vendor.friendlydrop.in";
+    if (vendorUrl) return `${vendorUrl}/dashboard`;
+    if (isLocalhost) return `http://vendor.localhost:${port}/dashboard`;
+    return "https://vendor.friendlydrop.in/dashboard";
   }
 
   if (ADMIN_ROLES.has(role)) {
-    return isLocal
-      ? `http://admin.localhost${port}`
-      : "https://admin.friendlydrop.in";
+    if (adminUrl) return `${adminUrl}/control-tower`;
+    if (isLocalhost) return `http://admin.localhost:${port}/control-tower`;
+    return "https://admin.friendlydrop.in/control-tower";
   }
 
+  return null; // Regular customer stays on main domain
+}
+
+/** @deprecated Use getRoleRedirectUrl instead */
+function getRoleRedirectPath(role: string): string | null {
+  if (role === "vendor") return "/vendor/dashboard";
+  if (ADMIN_ROLES.has(role)) return "/admin/dashboard";
   return null;
 }
 
@@ -84,9 +99,9 @@ export function LoginAuthPanel({ storeName, brandPrefix, logoUrl, loginLeftImage
 
   useEffect(() => {
     if (!loading && user) {
-      const zoneUrl = getZoneUrl(role);
-      if (zoneUrl) {
-        window.location.href = zoneUrl;
+      const redirectUrl = getRoleRedirectUrl(role);
+      if (redirectUrl) {
+        window.location.href = redirectUrl;
       } else {
         router.replace(redirect);
       }
@@ -99,10 +114,10 @@ export function LoginAuthPanel({ storeName, brandPrefix, logoUrl, loginLeftImage
     try {
       const resolvedRole = await login(email, password);
       toast.success("Welcome back");
-      const zoneUrl = getZoneUrl(resolvedRole);
-      if (zoneUrl) {
-        // Full navigation to a different subdomain
-        window.location.href = zoneUrl;
+      const redirectUrl = getRoleRedirectUrl(resolvedRole);
+      if (redirectUrl) {
+        // Full navigation to the correct subdomain
+        window.location.href = redirectUrl;
       } else {
         router.replace(redirect);
       }

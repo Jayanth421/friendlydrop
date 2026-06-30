@@ -26,15 +26,15 @@ const DEFAULT_ZONES: ShippingZone[] = [
 type SavingId = string | null;
 
 export function VendorShippingContent({ vendorProfile }: { vendorProfile: VendorProfile | null }) {
-  const [zones, setZones] = useState<ShippingZone[]>(vendorProfile?.settings?.shippingSettings?.zones || DEFAULT_ZONES);
+  const [zones, setZones] = useState<ShippingZone[]>(vendorProfile?.shippingSettings?.zones || DEFAULT_ZONES);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState<SavingId>(null);
   const [globalSettings, setGlobalSettings] = useState({
-    codEnabled: vendorProfile?.settings?.shippingSettings?.codEnabled ?? true,
-    prepaidEnabled: vendorProfile?.settings?.shippingSettings?.prepaidEnabled ?? true,
-    expressEnabled: vendorProfile?.settings?.shippingSettings?.expressEnabled ?? false,
-    processingDays: vendorProfile?.settings?.shippingSettings?.processingDays || "1",
-    cutoffTime: vendorProfile?.settings?.shippingSettings?.cutoffTime || "17:00",
+    codEnabled: vendorProfile?.shippingSettings?.codEnabled ?? true,
+    prepaidEnabled: vendorProfile?.shippingSettings?.prepaidEnabled ?? true,
+    expressEnabled: vendorProfile?.shippingSettings?.expressEnabled ?? false,
+    processingDays: vendorProfile?.shippingSettings?.processingDays || "1",
+    cutoffTime: vendorProfile?.shippingSettings?.cutoffTime || "17:00",
   });
 
   const [newZone, setNewZone] = useState({

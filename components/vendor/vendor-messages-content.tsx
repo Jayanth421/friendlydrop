@@ -25,7 +25,7 @@ export function VendorMessagesContent({ initialTickets }: { initialTickets: Supp
     id: t.id,
     sender: "Customer", // Ideally we fetch user details or store it in ticket
     subject: t.subject,
-    preview: t.messages[0]?.content || "No message",
+    preview: t.messages[0]?.message || "No message",
     date: new Date(t.createdAt).toLocaleDateString("en-IN"),
     read: true,
     status: t.status === "resolved" ? "resolved" : "open"

@@ -44,6 +44,7 @@ export function VendorTopbar({
               variant="secondary"
               className={cn("h-11 rounded-xl px-5")}
               onClick={() => router.push(`/vendor/search?q=${encodeURIComponent(query)}`)}
+              // On vendor.friendlydrop.in the middleware rewrites /vendor/search → correct page
             >
               Search
             </Button>

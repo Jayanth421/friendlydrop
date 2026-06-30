@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { headers } from "next/headers";
 import { Cormorant_Garamond, Manrope, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
@@ -12,6 +13,21 @@ import { Suspense } from "react";
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
 const cormorant = Cormorant_Garamond({ subsets: ["latin"], variable: "--font-cormorant", weight: ["400", "500", "600", "700"] });
+
+/** Returns true when the request is on admin.* or vendor.* subdomain */
+function isDashboardSubdomain(): boolean {
+  try {
+    const host = (headers().get("host") ?? "").split(":")[0].toLowerCase();
+    return (
+      host === "admin.friendlydrop.in" ||
+      host === "vendor.friendlydrop.in" ||
+      host === "admin.localhost" ||
+      host === "vendor.localhost"
+    );
+  } catch {
+    return false;
+  }
+}
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getCachedStoreSettings();
@@ -30,6 +46,31 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const isDashboard = isDashboardSubdomain();
+
+  // Admin and vendor subdomains render their own shell — skip customer chrome
+  if (isDashboard) {
+    return (
+      <html lang="en" className={`light ${manrope.variable} ${spaceGrotesk.variable} ${cormorant.variable}`} suppressHydrationWarning>
+        <body className="min-h-screen font-sans">
+          <AppProviders>
+            <Script id="force-light-mode" strategy="beforeInteractive">
+              {`
+                (() => {
+                  try {
+                    document.documentElement.classList.remove("dark");
+                    document.documentElement.classList.add("light");
+                  } catch (e) {}
+                })();
+              `}
+            </Script>
+            {children}
+          </AppProviders>
+        </body>
+      </html>
+    );
+  }
+
   const settings = await getCachedStoreSettings();
 
   return (
